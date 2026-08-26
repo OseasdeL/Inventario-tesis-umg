@@ -362,7 +362,7 @@ export default function App() {
 {vistaActiva === 'estaciones' && (
           <Estaciones 
             userRole={usuario.rol} 
-            sedes={[]} 
+            
           />
         )}
   
