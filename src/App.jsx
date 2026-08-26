@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Warehouse, Box, QrCode, ArrowRightLeft, Search, LogOut, Plus, History, Package } from 'lucide-react';
+import { Building2, Warehouse, Box, QrCode, ArrowRightLeft, Search, LogOut, Plus, History, Package, Radio} from 'lucide-react';
 import Login from './Login';
 import NuevoActivoModal from './NuevoActivoModal';
 import ScannerQRModal from './ScannerQRModal';
 import SesionExpiradaModal from './SesionExpiradaModal';
 import NuevoMovimientoModal from './NuevoMovimientoModal';
 import PanelAprobacionesAdmin from './PanelAprobacionesAdmin';
+import Estaciones from './Estaciones';
 import { supabase } from './supabaseClient';
 
 export default function App() {
@@ -232,7 +233,22 @@ export default function App() {
       <ArrowRightLeft className="w-4 h-4" />
       Gestión de Solicitudes
     </button>
+
+    <button
+      onClick={() => setVistaActiva('estaciones')}
+      className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+        vistaActiva === 'estaciones'
+          ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+          : 'border-transparent text-slate-400 hover:text-slate-200'
+      }`}
+    >
+      <Radio className="w-4 h-4" />
+      Estaciones
+    </button>
+
   </div>
+
+  
 </div>
         
    <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
@@ -341,6 +357,15 @@ export default function App() {
       />
     </div>
   )}
+
+
+{vistaActiva === 'estaciones' && (
+          <Estaciones 
+            userRole={usuario.rol} 
+            sedes={[]} 
+          />
+        )}
+  
 
 </main>
 
