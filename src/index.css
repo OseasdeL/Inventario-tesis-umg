@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* Prevenir auto-zoom de iOS en inputs, selects y textareas */
+@media screen and (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
