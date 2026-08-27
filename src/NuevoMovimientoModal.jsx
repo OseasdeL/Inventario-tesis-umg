@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, ArrowRight, Package, Cable, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Plus, Trash2, ArrowRight, Package, Cable, AlertCircle, Loader2, Radio, ArrowLeftRight } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovimientoCreado }) {
-  const [bodegas, setBodegas] = useState([]);
+  const [sedes, setSedes] = useState([]);
+  const [estaciones, setEstaciones] = useState([]);
   const [activosDisponibles, setActivosDisponibles] = useState([]);
   const [consumiblesDisponibles, setConsumiblesDisponibles] = useState([]);
 
   // Formulario principal
-  const [bodegaOrigen, setBodegaOrigen] = useState('');
-  const [bodegaDestino, setBodegaDestino] = useState('');
+  const [sedeId, setSedeId] = useState('');
+  const [tipoMovimiento, setTipoMovimiento] = useState('bodega_a_estacion'); // 'bodega_a_estacion', 'estacion_a_bodega', 'estacion_a_estacion'
+  const [estacionOrigenId, setEstacionOrigenId] = useState('');
+  const [estacionDestinoId, setEstacionDestinoId] = useState('');
   const [observacion, setObservacion] = useState('');
 
   // Carrito de ítems seleccionados
@@ -17,6 +20,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
 
   // Controles de selección temporal
   const [activoTemp, setActivoTemp] = useState('');
+  const [estadoRetornoTemp, setEstadoRetornoTemp] = useState('Disponible');
   const [consumibleTemp, setConsumibleTemp] = useState('');
   const [cantidadConsumibleTemp, setCantidadConsumibleTemp] = useState(1);
 
@@ -25,52 +29,101 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
 
   useEffect(() => {
     if (isOpen) {
-      cargarCatalogos();
+      cargarSedes();
       resetForm();
     }
   }, [isOpen]);
 
+  // Cada vez que cambie la sede, el tipo de traslado o la estación origen, recargamos estaciones e ítems
+  useEffect(() => {
+    if (isOpen && sedeId) {
+      cargarEstacionesYItems();
+    }
+  }, [sedeId, tipoMovimiento, estacionOrigenId]);
+
   const resetForm = () => {
-    setBodegaOrigen('');
-    setBodegaDestino('');
+    setSedeId('');
+    setTipoMovimiento('bodega_a_estacion');
+    setEstacionOrigenId('');
+    setEstacionDestinoId('');
     setObservacion('');
     setItemsSeleccionados([]);
     setActivoTemp('');
+    setEstadoRetornoTemp('Disponible');
     setConsumibleTemp('');
     setCantidadConsumibleTemp(1);
     setError('');
   };
 
-  const cargarCatalogos = async () => {
+  const cargarSedes = async () => {
     try {
-      // 1. Cargar Bodegas con Sedes
-      const { data: dataBodegas } = await supabase
-        .from('bodegas')
-        .select('id, nombre, sedes(nombre)');
-      if (dataBodegas) setBodegas(dataBodegas);
-
-      // 2. Cargar Activos
-      const { data: dataActivos } = await supabase
-        .from('activos')
-        .select('id, inventario, serial, categoria, bodega_id');
-      if (dataActivos) setActivosDisponibles(dataActivos);
-
-      // 3. Cargar Consumibles
-      const { data: dataConsumibles } = await supabase
-        .from('consumibles')
-        .select('id, nombre, cantidad_stock');
-      if (dataConsumibles) setConsumiblesDisponibles(dataConsumibles);
-
+      const { data } = await supabase.from('sedes').select('id, nombre');
+      if (data) setSedes(data);
     } catch (err) {
-      console.error('Error al cargar datos para el movimiento:', err);
+      console.error('Error al cargar sedes:', err);
     }
   };
 
-  // Filtrar activos según la bodega de origen elegida
-  const activosEnOrigen = activosDisponibles.filter(
-    a => String(a.bodega_id) === String(bodegaOrigen) &&
-    !itemsSeleccionados.some(i => i.tipo === 'activo' && i.id === a.id)
-  );
+  const cargarEstacionesYItems = async () => {
+    try {
+      // 1. Cargar estaciones asociadas a la sede
+      const { data: dataEstaciones } = await supabase
+        .from('estaciones')
+        .select('id, nombre')
+        .eq('sede_id', sedeId);
+      setEstaciones(dataEstaciones || []);
+
+      // 2. Cargar activos y consumibles según el origen
+      if (tipoMovimiento === 'bodega_a_estacion') {
+        // De Bodega Central: Solo activos "Disponibles" y sin estación asignada
+        const { data: dataActivos } = await supabase
+          .from('activos')
+          .select('id, inventario, serial, categoria, estado')
+          .eq('sede_id', sedeId)
+          .is('estacion_id', null)
+          .eq('estado', 'Disponible');
+        setActivosDisponibles(dataActivos || []);
+
+        const { data: dataConsumibles } = await supabase
+          .from('consumibles')
+          .select('id, nombre, cantidad_stock')
+          .eq('sede_id', sedeId)
+          .is('estacion_id', null);
+        setConsumiblesDisponibles(dataConsumibles || []);
+      } else {
+        // De una Estación: Solo activos/consumibles en esa estación de origen
+        if (!estacionOrigenId) {
+          setActivosDisponibles([]);
+          setConsumiblesDisponibles([]);
+          return;
+        }
+
+        const { data: dataActivos } = await supabase
+          .from('activos')
+          .select('id, inventario, serial, categoria, estado')
+          .eq('estacion_id', estacionOrigenId);
+        setActivosDisponibles(dataActivos || []);
+
+        const { data: dataConsumibles } = await supabase
+          .from('consumibles')
+          .select('id, nombre, cantidad_stock')
+          .eq('estacion_id', estacionOrigenId);
+        setConsumiblesDisponibles(dataConsumibles || []);
+      }
+    } catch (err) {
+      console.error('Error al cargar datos del origen:', err);
+    }
+  };
+
+  // Cambio del tipo de movimiento
+  const handleCambioTipoMovimiento = (nuevoTipo) => {
+    setTipoMovimiento(nuevoTipo);
+    setEstacionOrigenId('');
+    setEstacionDestinoId('');
+    setItemsSeleccionados([]);
+    setActivoTemp('');
+    setConsumibleTemp('');
+  };
 
   // Agregar Activo al carrito
   const handleAgregarActivo = () => {
@@ -83,8 +136,9 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
       {
         tipo: 'activo',
         id: activoObj.id,
-        nombre: `${activoObj.inventario} - ${activoObj.categoria} (Serie: ${activoObj.serial})`,
-        cantidad: 1
+        nombre: `${activoObj.inventario || 'S/N'} | ${activoObj.categoria || 'Activo'} - Serie: ${activoObj.serial || 'N/A'}`,
+        cantidad: 1,
+        estado_retorno_bodega: tipoMovimiento === 'estacion_a_bodega' ? estadoRetornoTemp : null
       }
     ]);
     setActivoTemp('');
@@ -102,7 +156,6 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     }
     setError('');
 
-    // Si ya existe en el carrito, sumar la cantidad
     const existente = itemsSeleccionados.find(i => i.tipo === 'consumible' && i.id === consObj.id);
     if (existente) {
       setItemsSeleccionados(itemsSeleccionados.map(i => {
@@ -118,7 +171,8 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
           tipo: 'consumible',
           id: consObj.id,
           nombre: consObj.nombre,
-          cantidad: Number(cantidadConsumibleTemp)
+          cantidad: Number(cantidadConsumibleTemp),
+          estado_retorno_bodega: null
         }
       ]);
     }
@@ -133,12 +187,20 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
 
   // Guardar Solicitud en Supabase
   const handleGuardarMovimiento = async () => {
-    if (!bodegaOrigen || !bodegaDestino) {
-      setError('Por favor selecciona la bodega de origen y destino');
+    if (!sedeId) {
+      setError('Por favor selecciona la sede');
       return;
     }
-    if (bodegaOrigen === bodegaDestino) {
-      setError('La bodega origen y destino no pueden ser la misma');
+    if (tipoMovimiento !== 'bodega_a_estacion' && !estacionOrigenId) {
+      setError('Por favor selecciona la estación de origen');
+      return;
+    }
+    if (tipoMovimiento !== 'estacion_a_bodega' && !estacionDestinoId) {
+      setError('Por favor selecciona la estación de destino');
+      return;
+    }
+    if (tipoMovimiento === 'estacion_a_estacion' && estacionOrigenId === estacionDestinoId) {
+      setError('La estación origen y destino no pueden ser la misma');
       return;
     }
     if (itemsSeleccionados.length === 0) {
@@ -150,14 +212,17 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     setError('');
 
     try {
-      // 1. Insertar Cabecera del Movimiento (Estado: 'pendiente')
+      // 1. Insertar Cabecera del Movimiento
       const { data: movData, error: errMov } = await supabase
         .from('movimientos')
         .insert([{
-          tecnico_id: usuario.id,
-          bodega_origen_id: bodegaOrigen,
-          bodega_destino_id: bodegaDestino,
-          estado: 'pendiente',
+          sede_id: parseInt(sedeId),
+          tipo_origen: tipoMovimiento === 'bodega_a_estacion' ? 'bodega' : 'estacion',
+          estacion_origen_id: tipoMovimiento === 'bodega_a_estacion' ? null : parseInt(estacionOrigenId),
+          tipo_destino: tipoMovimiento === 'estacion_a_bodega' ? 'bodega' : 'estacion',
+          estacion_destino_id: tipoMovimiento === 'estacion_a_bodega' ? null : parseInt(estacionDestinoId),
+          tecnico_id: usuario?.id || null,
+          estado: 'Pendiente',
           observacion: observacion.trim()
         }])
         .select()
@@ -171,7 +236,8 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
         tipo_item: item.tipo,
         activo_id: item.tipo === 'activo' ? item.id : null,
         consumible_id: item.tipo === 'consumible' ? item.id : null,
-        cantidad: item.cantidad
+        cantidad: item.cantidad,
+        estado_retorno_bodega: item.estado_retorno_bodega
       }));
 
       const { error: errDet } = await supabase
@@ -192,6 +258,11 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
   };
 
   if (!isOpen) return null;
+
+  // Filtrar activos que no estén en el carrito
+  const activosDisponiblesFiltrados = activosDisponibles.filter(
+    a => !itemsSeleccionados.some(i => i.tipo === 'activo' && i.id === a.id)
+  );
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -217,64 +288,157 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
             </div>
           )}
 
-          {/* Rutas (Origen y Destino) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Bodega Origen</label>
-              <select
-                value={bodegaOrigen}
-                onChange={(e) => {
-                  setBodegaOrigen(e.target.value);
-                  setItemsSeleccionados([]); // Limpiar carrito al cambiar origen
-                }}
-                className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Seleccionar --</option>
-                {bodegas.map(b => (
-                  <option key={b.id} value={b.id}>{b.nombre} ({b.sedes?.nombre})</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Bodega Destino</label>
-              <select
-                value={bodegaDestino}
-                onChange={(e) => setBodegaDestino(e.target.value)}
-                className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Seleccionar --</option>
-                {bodegas.map(b => (
-                  <option key={b.id} value={b.id}>{b.nombre} ({b.sedes?.nombre})</option>
-                ))}
-              </select>
-            </div>
+          {/* 1. Seleccionar Sede */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Sede de la Gestión</label>
+            <select
+              value={sedeId}
+              onChange={(e) => {
+                setSedeId(e.target.value);
+                setItemsSeleccionados([]);
+              }}
+              className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Seleccionar Sede --</option>
+              {sedes.map(s => (
+                <option key={s.id} value={s.id}>{s.nombre}</option>
+              ))}
+            </select>
           </div>
 
+          {/* 2. Tipo de Movimiento */}
+          {sedeId && (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">Tipo de Traslado</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCambioTipoMovimiento('bodega_a_estacion')}
+                  className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-medium transition-all ${
+                    tipoMovimiento === 'bodega_a_estacion'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Package className="w-4 h-4" /> Bodega → Estación
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleCambioTipoMovimiento('estacion_a_bodega')}
+                  className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-medium transition-all ${
+                    tipoMovimiento === 'estacion_a_bodega'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Radio className="w-4 h-4" /> Estación → Bodega
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleCambioTipoMovimiento('estacion_a_estacion')}
+                  className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-medium transition-all ${
+                    tipoMovimiento === 'estacion_a_estacion'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <ArrowLeftRight className="w-4 h-4" /> Estación → Estación
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 3. Rutas (Origen y Destino) */}
+          {sedeId && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Origen</label>
+                {tipoMovimiento === 'bodega_a_estacion' ? (
+                  <div className="text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-100 font-semibold text-slate-600 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-blue-500" /> Bodega Central
+                  </div>
+                ) : (
+                  <select
+                    value={estacionOrigenId}
+                    onChange={(e) => {
+                      setEstacionOrigenId(e.target.value);
+                      setItemsSeleccionados([]);
+                    }}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- Seleccionar Estación Origen --</option>
+                    {estaciones.map(e => (
+                      <option key={e.id} value={e.id}>{e.nombre}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Destino</label>
+                {tipoMovimiento === 'estacion_a_bodega' ? (
+                  <div className="text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-100 font-semibold text-slate-600 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-emerald-500" /> Bodega Central
+                  </div>
+                ) : (
+                  <select
+                    value={estacionDestinoId}
+                    onChange={(e) => setEstacionDestinoId(e.target.value)}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- Seleccionar Estación Destino --</option>
+                    {estaciones
+                      .filter(e => String(e.id) !== String(estacionOrigenId))
+                      .map(e => (
+                        <option key={e.id} value={e.id}>{e.nombre}</option>
+                      ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Agregar Activos Fijos */}
-          {bodegaOrigen && (
+          {sedeId && (tipoMovimiento === 'bodega_a_estacion' || estacionOrigenId) && (
             <div className="space-y-2 border-t border-slate-100 pt-3">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <Package className="w-4 h-4 text-blue-600" /> Agregar Equipo / Activo Fijo
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   value={activoTemp}
                   onChange={(e) => setActivoTemp(e.target.value)}
                   className="flex-1 text-xs border border-slate-300 rounded-lg p-2 bg-white"
                 >
-                  <option value="">-- Seleccionar Activo en Bodega --</option>
-                  {activosEnOrigen.map(a => (
+                  <option value="">-- Seleccionar Activo Disponible --</option>
+                  {activosDisponiblesFiltrados.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.inventario} | {a.categoria} - Serie: {a.serial}
+                      {a.inventario || 'S/N'} | {a.categoria || 'Equipo'} - Serie: {a.serial || 'N/A'}
                     </option>
                   ))}
                 </select>
+
+                {/* Selección del estado de retorno si el destino es Bodega Central */}
+                {tipoMovimiento === 'estacion_a_bodega' && (
+                  <select
+                    value={estadoRetornoTemp}
+                    onChange={(e) => setEstadoRetornoTemp(e.target.value)}
+                    className="text-xs border border-slate-300 rounded-lg p-2 bg-white"
+                  >
+                    <option value="Disponible">Disponible</option>
+                    <option value="En diagnostico">En diagnóstico</option>
+                    <option value="Dano irreparable">Daño irreparable</option>
+                    <option value="Para cobro">Para cobro</option>
+                  </select>
+                )}
+
                 <button
                   type="button"
                   onClick={handleAgregarActivo}
                   disabled={!activoTemp}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1"
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 shrink-0"
                 >
                   <Plus className="w-4 h-4" /> Agregar
                 </button>
@@ -283,42 +447,44 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
           )}
 
           {/* Agregar Consumibles */}
-          <div className="space-y-2 border-t border-slate-100 pt-3">
-            <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <Cable className="w-4 h-4 text-emerald-600" /> Agregar Consumibles (Cables, Conectores)
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={consumibleTemp}
-                onChange={(e) => setConsumibleTemp(e.target.value)}
-                className="flex-1 text-xs border border-slate-300 rounded-lg p-2 bg-white"
-              >
-                <option value="">-- Seleccionar Consumible --</option>
-                {consumiblesDisponibles.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre} (Stock disponible: {c.cantidad_stock})
-                  </option>
-                ))}
-              </select>
+          {sedeId && (tipoMovimiento === 'bodega_a_estacion' || estacionOrigenId) && (
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Cable className="w-4 h-4 text-emerald-600" /> Agregar Consumibles (Cables, Conectores)
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={consumibleTemp}
+                  onChange={(e) => setConsumibleTemp(e.target.value)}
+                  className="flex-1 text-xs border border-slate-300 rounded-lg p-2 bg-white"
+                >
+                  <option value="">-- Seleccionar Consumible --</option>
+                  {consumiblesDisponibles.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre} (Stock disponible: {c.cantidad_stock})
+                    </option>
+                  ))}
+                </select>
 
-              <input
-                type="number"
-                min="1"
-                value={cantidadConsumibleTemp}
-                onChange={(e) => setCantidadConsumibleTemp(e.target.value)}
-                className="w-16 text-xs border border-slate-300 rounded-lg p-2 text-center"
-              />
+                <input
+                  type="number"
+                  min="1"
+                  value={cantidadConsumibleTemp}
+                  onChange={(e) => setCantidadConsumibleTemp(e.target.value)}
+                  className="w-16 text-xs border border-slate-300 rounded-lg p-2 text-center"
+                />
 
-              <button
-                type="button"
-                onClick={handleAgregarConsumible}
-                disabled={!consumibleTemp}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" /> Agregar
-              </button>
+                <button
+                  type="button"
+                  onClick={handleAgregarConsumible}
+                  disabled={!consumibleTemp}
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 shrink-0"
+                >
+                  <Plus className="w-4 h-4" /> Agregar
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Lista de Ítems Agregados (Carrito) */}
           <div className="space-y-2 border-t border-slate-100 pt-3">
@@ -333,7 +499,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {itemsSeleccionados.map((item, idx) => (
                   <div key={idx} className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {item.tipo === 'activo' ? (
                         <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span>
                       ) : (
@@ -341,6 +507,11 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
                       )}
                       <span className="font-medium text-slate-800">{item.nombre}</span>
                       <span className="text-slate-500 font-bold">x{item.cantidad}</span>
+                      {item.estado_retorno_bodega && (
+                        <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                          [{item.estado_retorno_bodega}]
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"

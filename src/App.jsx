@@ -75,43 +75,36 @@ export default function App() {
   // Cargar activos y movimientos al iniciar la app
   useEffect(() => {
     if (usuario) {
-      obtenerActivos();
+      cargarActivos();
       obtenerMovimientos();
     }
   }, [usuario]);
 
-  const obtenerActivos = async () => {
-    const { data, error } = await supabase
-      .from('activos')
-      .select(`
-        id,
-        qr,
-        inventario,
-        serial,
-        categoria,
-        estado,
-        bodegas (
-          nombre,
-          sedes ( nombre )
-        )
-      `);
+  const cargarActivos = async () => {
+  const { data, error } = await supabase
+    .from('activos')
+    .select(`
+      id,
+      qr,
+      inventario,
+      serial,
+      especificacion,
+      propiedad,
+      estado,
+      sedes ( id, nombre ),
+      bodegas ( id, nombre ),
+      estaciones ( id, nombre ),
+      tipos_activo ( id, nombre ),
+      marcas ( id, nombre )
+    `)
+    .order('id', { ascending: false });
 
-    if (error) {
-      console.error('Error al cargar activos:', error);
-    } else if (data) {
-      const activosFormateados = data.map(item => ({
-        id: item.id,
-        qr: item.qr,
-        inventario: item.inventario,
-        serial: item.serial,
-        categoria: item.categoria,
-        estado: item.estado,
-        bodega: item.bodegas?.nombre || 'Sin bodega',
-        sede: item.bodegas?.sedes?.nombre || 'Sin sede'
-      }));
-      setActivos(activosFormateados);
-    }
-  };
+  if (error) {
+    console.error('Error al cargar activos:', error);
+  } else {
+    setActivos(data);
+  }
+};
 
   const obtenerMovimientos = async () => {
   // 1. Iniciamos la consulta base
@@ -271,65 +264,117 @@ export default function App() {
       </div>
 
       {/* Tabla de Inventario de Activos Fijos */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
-          <h2 className="font-bold text-slate-800 text-base">Inventario de Activos Fijos</h2>
-          <button 
-            onClick={() => setIsNuevoModalOpen(true)}
-            className="flex-1 sm:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
-          >
-            <Plus className="w-4 h-4" /> Nuevo Activo
-          </button>
-        </div>
+<div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+  <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+    <h2 className="font-bold text-slate-800 text-base">Inventario de Activos Fijos</h2>
+    <button 
+      onClick={() => setIsNuevoModalOpen(true)}
+      className="flex-1 sm:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
+    >
+      <Plus className="w-4 h-4" /> Nuevo Activo
+    </button>
+  </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs sm:text-sm text-slate-600">
-            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
-              <tr>
-                <th className="px-4 sm:px-6 py-3">Código QR</th>
-                <th className="px-4 sm:px-6 py-3">No. Inventario</th>
-                <th className="px-4 sm:px-6 py-3">No. Serie</th>
-                <th className="px-4 sm:px-6 py-3">Ubicación Actual</th>
-                <th className="px-4 sm:px-6 py-3">Estado</th>
+  <div className="overflow-x-auto">
+    <table className="w-full text-left text-xs sm:text-sm text-slate-600">
+      <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+        <tr>
+          <th className="px-4 sm:px-6 py-3">Código QR</th>
+          <th className="px-4 sm:px-6 py-3">No. Inventario / Serie</th>
+          <th className="px-4 sm:px-6 py-3">Equipo</th>
+          <th className="px-4 sm:px-6 py-3">Ubicación Actual</th>
+          <th className="px-4 sm:px-6 py-3">Propiedad</th>
+          <th className="px-4 sm:px-6 py-3">Estado</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {activosFiltrados.length === 0 ? (
+          <tr>
+            <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
+              No se encontraron activos registrados.
+            </td>
+          </tr>
+        ) : (
+          activosFiltrados.map((activo) => {
+            // Determinar si el activo está en Bodega o en Estación
+            const ubicacionNombre = activo.bodegas?.nombre 
+              ? `Bodega: ${activo.bodegas.nombre}`
+              : activo.estaciones?.nombre 
+              ? `Estación: ${activo.estaciones.nombre}`
+              : 'Sin Ubicación';
+
+            const esBodega = Boolean(activo.bodegas?.nombre);
+
+            return (
+              <tr key={activo.id} className="hover:bg-slate-50 transition-colors">
+                {/* QR */}
+                <td className="px-4 sm:px-6 py-3.5 font-mono text-[11px] font-semibold text-blue-600">
+                  <span className="bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                    {activo.qr}
+                  </span>
+                </td>
+
+                {/* Inventario y Serial */}
+                <td className="px-4 sm:px-6 py-3.5">
+                  <div className="font-semibold text-slate-900 font-mono">{activo.inventario}</div>
+                  <div className="text-[11px] font-mono text-slate-400">SN: {activo.serial}</div>
+                </td>
+
+                {/* Tipo, Marca y Especificación */}
+                <td className="px-4 sm:px-6 py-3.5">
+                  <div className="font-medium text-slate-800">
+                    {activo.tipos_activo?.nombre || 'General'} - {activo.marcas?.nombre || 'N/A'}
+                  </div>
+                  {activo.especificacion && (
+                    <div className="text-[11px] text-slate-500 truncate max-w-[200px]">
+                      {activo.especificacion}
+                    </div>
+                  )}
+                </td>
+
+                {/* Ubicación (Bodega o Estación + Sede) */}
+                <td className="px-4 sm:px-6 py-3.5">
+                  <div className={`font-medium ${esBodega ? 'text-blue-700' : 'text-purple-700'}`}>
+                    {ubicacionNombre}
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {activo.sedes?.nombre || 'Sede N/A'}
+                  </div>
+                </td>
+
+                {/* Propiedad */}
+                <td className="px-4 sm:px-6 py-3.5">
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                    activo.propiedad === 'Leasing'
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-slate-100 text-slate-700 border-slate-200'
+                  }`}>
+                    {activo.propiedad || 'Propio'}
+                  </span>
+                </td>
+
+                {/* Estado Operativo */}
+                <td className="px-4 sm:px-6 py-3.5">
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                    activo.estado === 'Disponible'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : activo.estado === 'Asignado'
+                      ? 'bg-blue-100 text-blue-700'
+                      : activo.estado === 'En diagnostico'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-rose-100 text-rose-700'
+                  }`}>
+                    {activo.estado}
+                  </span>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {activosFiltrados.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-slate-400">
-                    No se encontraron activos registrados.
-                  </td>
-                </tr>
-              ) : (
-                activosFiltrados.map((activo) => (
-                  <tr key={activo.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 sm:px-6 py-3.5 font-mono text-[11px] font-semibold text-blue-600">
-                      <span className="bg-blue-50 px-2 py-0.5 rounded border border-blue-100">{activo.qr}</span>
-                    </td>
-                    <td className="px-4 sm:px-6 py-3.5 font-semibold text-slate-900 font-mono">{activo.inventario}</td>
-                    <td className="px-4 sm:px-6 py-3.5 font-mono text-slate-600">{activo.serial}</td>
-                    <td className="px-4 sm:px-6 py-3.5">
-                      <div className="font-medium text-slate-800">{activo.bodega}</div>
-                      <div className="text-[11px] text-slate-400">{activo.sede}</div>
-                    </td>
-                    <td className="px-4 sm:px-6 py-3.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                        activo.estado === 'Excelente' 
-                          ? 'bg-emerald-100 text-emerald-700' 
-                          : activo.estado === 'Bueno'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {activo.estado}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            );
+          })
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
     </>
   )}
 
