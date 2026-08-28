@@ -5,20 +5,21 @@ import { supabase } from './supabaseClient';
 export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovimientoCreado }) {
   const [sedes, setSedes] = useState([]);
   const [estaciones, setEstaciones] = useState([]);
+  const [bodegaInfo, setBodegaInfo] = useState(null); // Guarda los datos de la bodega (ej: { id: 4, Nombre: 'BCPC1' })
   const [activosDisponibles, setActivosDisponibles] = useState([]);
   const [consumiblesDisponibles, setConsumiblesDisponibles] = useState([]);
 
   // Formulario principal
   const [sedeId, setSedeId] = useState('');
-  const [tipoMovimiento, setTipoMovimiento] = useState('bodega_a_estacion'); // 'bodega_a_estacion', 'estacion_a_bodega', 'estacion_a_estacion'
+  const [tipoMovimiento, setTipoMovimiento] = useState('bodega_a_estacion');
   const [estacionOrigenId, setEstacionOrigenId] = useState('');
   const [estacionDestinoId, setEstacionDestinoId] = useState('');
   const [observacion, setObservacion] = useState('');
 
-  // Carrito de ítems seleccionados
+  // Carrito de ítems
   const [itemsSeleccionados, setItemsSeleccionados] = useState([]);
 
-  // Controles de selección temporal
+  // Selección temporal
   const [activoTemp, setActivoTemp] = useState('');
   const [estadoRetornoTemp, setEstadoRetornoTemp] = useState('Disponible');
   const [consumibleTemp, setConsumibleTemp] = useState('');
@@ -34,18 +35,27 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     }
   }, [isOpen]);
 
-  // Cada vez que cambie la sede, el tipo de traslado o la estación origen, recargamos estaciones e ítems
+  // Al seleccionar una sede, cargamos su Bodega y sus Estaciones
   useEffect(() => {
     if (isOpen && sedeId) {
-      cargarEstacionesYItems();
+      cargarBodegaCentral(sedeId);
+      cargarEstaciones(sedeId);
     }
-  }, [sedeId, tipoMovimiento, estacionOrigenId]);
+  }, [sedeId, isOpen]);
+
+  // Al cambiar la bodega, la estación de origen o el tipo de movimiento, cargamos los items
+  useEffect(() => {
+    if (isOpen && sedeId) {
+      cargarItemsDisponibles();
+    }
+  }, [bodegaInfo, estacionOrigenId, tipoMovimiento]);
 
   const resetForm = () => {
     setSedeId('');
     setTipoMovimiento('bodega_a_estacion');
     setEstacionOrigenId('');
     setEstacionDestinoId('');
+    setBodegaInfo(null);
     setObservacion('');
     setItemsSeleccionados([]);
     setActivoTemp('');
@@ -57,41 +67,103 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
 
   const cargarSedes = async () => {
     try {
-      const { data } = await supabase.from('sedes').select('id, nombre');
+      const { data, error } = await supabase.from('sedes').select('id, nombre');
+      if (error) throw error;
       if (data) setSedes(data);
     } catch (err) {
       console.error('Error al cargar sedes:', err);
     }
   };
 
-  const cargarEstacionesYItems = async () => {
+// Cargar la bodega asociada a la sede seleccionada
+  const cargarBodegaCentral = async (idSede) => {
+    if (!idSede) {
+      setBodegaInfo(null);
+      return;
+    }
+
     try {
-      // 1. Cargar estaciones asociadas a la sede
-      const { data: dataEstaciones } = await supabase
+      const idNumerico = Number(idSede);
+      console.log('🔍 Buscando bodega para sede_id:', idNumerico);
+
+      const { data, error } = await supabase
+        .from('bodegas')
+        .select('*') // Traemos todas las columnas para evitar errores de select
+        .eq('sede_id', idNumerico);
+
+      if (error) {
+        console.error('❌ Error de Supabase al consultar bodegas:', error);
+        throw error;
+      }
+
+      console.log('📦 Respuesta de Supabase en bodegas:', data);
+
+      if (data && data.length > 0) {
+        // Asignamos la bodega encontrada
+        setBodegaInfo(data[0]);
+      } else {
+        console.warn(`⚠️ No se encontró ningún registro en 'bodegas' donde sede_id = ${idNumerico}`);
+        setBodegaInfo(null);
+      }
+    } catch (err) {
+      console.error('Error al cargar bodega:', err);
+      setBodegaInfo(null);
+    }
+  };
+
+  // Cargar las estaciones pertenecientes a la sede
+  const cargarEstaciones = async (idSede) => {
+    try {
+      const { data, error } = await supabase
         .from('estaciones')
         .select('id, nombre')
-        .eq('sede_id', sedeId);
-      setEstaciones(dataEstaciones || []);
+        .eq('sede_id', parseInt(idSede, 10));
 
-      // 2. Cargar activos y consumibles según el origen
+      if (error) throw error;
+      setEstaciones(data || []);
+    } catch (err) {
+      console.error('Error al cargar estaciones:', err);
+    }
+  };
+
+  // Cargar Activos y Consumibles disponibles según el origen
+  const cargarItemsDisponibles = async () => {
+    try {
       if (tipoMovimiento === 'bodega_a_estacion') {
-        // De Bodega Central: Solo activos "Disponibles" y sin estación asignada
-        const { data: dataActivos } = await supabase
+        // Traer activos de la Bodega / Sede
+        let queryActivos = supabase
           .from('activos')
-          .select('id, inventario, serial, categoria, estado')
-          .eq('sede_id', sedeId)
+          .select('id, inventario, serial, estado, especificacion')
+          .eq('sede_id', parseInt(sedeId, 10))
           .is('estacion_id', null)
           .eq('estado', 'Disponible');
+
+        if (bodegaInfo?.id) {
+          queryActivos = queryActivos.eq('bodega_id', bodegaInfo.id);
+        }
+
+        const { data: dataActivos, error: errAct } = await queryActivos;
+        if (errAct) console.error('Error activos:', errAct);
         setActivosDisponibles(dataActivos || []);
 
-        const { data: dataConsumibles } = await supabase
+        // Traer consumibles de la Bodega / Sede
+        let queryConsumibles = supabase
           .from('consumibles')
           .select('id, nombre, cantidad_stock')
-          .eq('sede_id', sedeId)
+          .eq('sede_id', parseInt(sedeId, 10))
+          .gt('cantidad_stock', 0)
           .is('estacion_id', null);
+
+        if (bodegaInfo?.id) {
+          queryConsumibles = queryConsumibles.eq('bodega_id', bodegaInfo.id);
+        }
+
+        const { data: dataConsumibles, error: errCons } = await queryConsumibles;
+        if (errCons) console.error('Error consumibles:', errCons);
         setConsumiblesDisponibles(dataConsumibles || []);
+
       } else {
-        // De una Estación: Solo activos/consumibles en esa estación de origen
+        // Traslado desde Estación
         if (!estacionOrigenId) {
           setActivosDisponibles([]);
           setConsumiblesDisponibles([]);
@@ -100,22 +172,21 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
 
         const { data: dataActivos } = await supabase
           .from('activos')
-          .select('id, inventario, serial, categoria, estado')
-          .eq('estacion_id', estacionOrigenId);
+          .select('id, inventario, serial, estado,especificacion')
+          .eq('estacion_id', parseInt(estacionOrigenId, 10));
         setActivosDisponibles(dataActivos || []);
 
         const { data: dataConsumibles } = await supabase
           .from('consumibles')
           .select('id, nombre, cantidad_stock')
-          .eq('estacion_id', estacionOrigenId);
+          .eq('estacion_id', parseInt(estacionOrigenId, 10));
         setConsumiblesDisponibles(dataConsumibles || []);
       }
     } catch (err) {
-      console.error('Error al cargar datos del origen:', err);
+      console.error('Error al cargar ítems disponibles:', err);
     }
   };
 
-  // Cambio del tipo de movimiento
   const handleCambioTipoMovimiento = (nuevoTipo) => {
     setTipoMovimiento(nuevoTipo);
     setEstacionOrigenId('');
@@ -125,7 +196,6 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     setConsumibleTemp('');
   };
 
-  // Agregar Activo al carrito
   const handleAgregarActivo = () => {
     if (!activoTemp) return;
     const activoObj = activosDisponibles.find(a => String(a.id) === String(activoTemp));
@@ -136,7 +206,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
       {
         tipo: 'activo',
         id: activoObj.id,
-        nombre: `${activoObj.inventario || 'S/N'} | ${activoObj.categoria || 'Activo'} - Serie: ${activoObj.serial || 'N/A'}`,
+        nombre: `${activoObj.inventario || 'S/N'} | ${activoObj.especificacion || 'Activo'} - Serie: ${activoObj.serial || 'N/A'}`,
         cantidad: 1,
         estado_retorno_bodega: tipoMovimiento === 'estacion_a_bodega' ? estadoRetornoTemp : null
       }
@@ -144,7 +214,6 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     setActivoTemp('');
   };
 
-  // Agregar Consumible al carrito
   const handleAgregarConsumible = () => {
     if (!consumibleTemp) return;
     const consObj = consumiblesDisponibles.find(c => String(c.id) === String(consumibleTemp));
@@ -180,12 +249,10 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     setCantidadConsumibleTemp(1);
   };
 
-  // Eliminar elemento del carrito
   const handleEliminarItem = (index) => {
     setItemsSeleccionados(itemsSeleccionados.filter((_, i) => i !== index));
   };
 
-  // Guardar Solicitud en Supabase
   const handleGuardarMovimiento = async () => {
     if (!sedeId) {
       setError('Por favor selecciona la sede');
@@ -212,25 +279,37 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     setError('');
 
     try {
-      // 1. Insertar Cabecera del Movimiento
+      // Determinar bodega de origen y destino dinámicamente
+      const esBodegaOrigen = tipoMovimiento === 'bodega_a_estacion';
+      const esBodegaDestino = tipoMovimiento === 'estacion_a_bodega';
+
+      const idBodega = bodegaInfo ? bodegaInfo.id : null;
+
+      const payloadMovimiento = {
+        sede_id: parseInt(sedeId, 10),
+        tipo_origen: esBodegaOrigen ? 'bodega' : 'estacion',
+        bodega_origen_id: esBodegaOrigen ? idBodega : null,
+        estacion_origen_id: esBodegaOrigen ? null : parseInt(estacionOrigenId, 10),
+
+        tipo_destino: esBodegaDestino ? 'bodega' : 'estacion',
+        bodega_destino_id: esBodegaDestino ? idBodega : null,
+        estacion_destino_id: esBodegaDestino ? null : parseInt(estacionDestinoId, 10),
+
+        tecnico_id: usuario?.id || null,
+        estado: 'Pendiente',
+        observacion: observacion.trim()
+      };
+
+      // 1. Insertar el movimiento principal
       const { data: movData, error: errMov } = await supabase
         .from('movimientos')
-        .insert([{
-          sede_id: parseInt(sedeId),
-          tipo_origen: tipoMovimiento === 'bodega_a_estacion' ? 'bodega' : 'estacion',
-          estacion_origen_id: tipoMovimiento === 'bodega_a_estacion' ? null : parseInt(estacionOrigenId),
-          tipo_destino: tipoMovimiento === 'estacion_a_bodega' ? 'bodega' : 'estacion',
-          estacion_destino_id: tipoMovimiento === 'estacion_a_bodega' ? null : parseInt(estacionDestinoId),
-          tecnico_id: usuario?.id || null,
-          estado: 'Pendiente',
-          observacion: observacion.trim()
-        }])
+        .insert([payloadMovimiento])
         .select()
         .single();
 
       if (errMov) throw errMov;
 
-      // 2. Insertar Detalles
+      // 2. Insertar los detalles del movimiento (activos y consumibles)
       const detallesInsertar = itemsSeleccionados.map(item => ({
         movimiento_id: movData.id,
         tipo_item: item.tipo,
@@ -259,7 +338,6 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
 
   if (!isOpen) return null;
 
-  // Filtrar activos que no estén en el carrito
   const activosDisponiblesFiltrados = activosDisponibles.filter(
     a => !itemsSeleccionados.some(i => i.tipo === 'activo' && i.id === a.id)
   );
@@ -268,7 +346,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
-        {/* Cabecera del Modal */}
+        {/* Cabecera */}
         <div className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-blue-400" />
@@ -279,7 +357,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
           </button>
         </div>
 
-        {/* Cuerpo del Modal */}
+        {/* Cuerpo */}
         <div className="p-6 space-y-5 overflow-y-auto flex-1">
           {error && (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-lg text-xs flex items-center gap-2">
@@ -356,8 +434,19 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Origen</label>
                 {tipoMovimiento === 'bodega_a_estacion' ? (
-                  <div className="text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-100 font-semibold text-slate-600 flex items-center gap-2">
-                    <Package className="w-4 h-4 text-blue-500" /> Bodega Central
+                  <div className="text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-100 font-semibold text-slate-700 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-blue-500 shrink-0" />
+                    <span>
+                        {bodegaInfo
+                          ? (bodegaInfo.Nombre || bodegaInfo.nombre)
+                          : (
+                              sedeId === '1' ? 'BCPC1' :
+                              sedeId === '2' ? 'BCPC2' :
+                              sedeId === '3' ? 'BCPZ4' :
+                              sedeId === '4' ? 'BCR383' : 'Bodega Central'
+                            )
+                        }
+                    </span>
                   </div>
                 ) : (
                   <select
@@ -379,8 +468,9 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Destino</label>
                 {tipoMovimiento === 'estacion_a_bodega' ? (
-                  <div className="text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-100 font-semibold text-slate-600 flex items-center gap-2">
-                    <Package className="w-4 h-4 text-emerald-500" /> Bodega Central
+                  <div className="text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-100 font-semibold text-slate-700 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>{bodegaInfo ? bodegaInfo.Nombre : 'Cargando bodega...'}</span>
                   </div>
                 ) : (
                   <select
@@ -400,7 +490,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
             </div>
           )}
 
-          {/* Agregar Activos Fijos */}
+          {/* Agregar Activos */}
           {sedeId && (tipoMovimiento === 'bodega_a_estacion' || estacionOrigenId) && (
             <div className="space-y-2 border-t border-slate-100 pt-3">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
@@ -415,12 +505,11 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
                   <option value="">-- Seleccionar Activo Disponible --</option>
                   {activosDisponiblesFiltrados.map(a => (
                     <option key={a.id} value={a.id}>
-                      {a.inventario || 'S/N'} | {a.categoria || 'Equipo'} - Serie: {a.serial || 'N/A'}
+                      {a.inventario || 'S/N'} | {a.especificacion || 'Equipo'} - Serie: {a.serial || 'N/A'}
                     </option>
                   ))}
                 </select>
 
-                {/* Selección del estado de retorno si el destino es Bodega Central */}
                 {tipoMovimiento === 'estacion_a_bodega' && (
                   <select
                     value={estadoRetornoTemp}
@@ -486,7 +575,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
             </div>
           )}
 
-          {/* Lista de Ítems Agregados (Carrito) */}
+          {/* Lista de Ítems */}
           <div className="space-y-2 border-t border-slate-100 pt-3">
             <label className="text-xs font-bold text-slate-800">
               Resumen del Paquete ({itemsSeleccionados.length} ítems)
@@ -531,7 +620,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
             <label className="block text-xs font-bold text-slate-700 mb-1">Observaciones / Motivo</label>
             <textarea
               rows="2"
-              placeholder="Ej: Traslado para mantenimiento de estación de trabajo en laboratorio..."
+              placeholder="Ej: Traslado para mantenimiento de estación de trabajo..."
               value={observacion}
               onChange={(e) => setObservacion(e.target.value)}
               className="w-full text-xs border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500"
@@ -539,7 +628,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
           </div>
         </div>
 
-        {/* Footer con Acciones */}
+        {/* Footer */}
         <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex justify-between items-center">
           <button
             type="button"

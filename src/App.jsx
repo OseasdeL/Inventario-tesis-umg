@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Warehouse, Box, QrCode, ArrowRightLeft, Search, LogOut, Plus, History, Package, Radio} from 'lucide-react';
+import { Building2, Warehouse, Box, QrCode, ArrowRightLeft, Search, LogOut, Plus, History, Package, Radio, Boxes } from 'lucide-react';
 import Login from './Login';
 import NuevoActivoModal from './NuevoActivoModal';
 import ScannerQRModal from './ScannerQRModal';
@@ -7,6 +7,7 @@ import SesionExpiradaModal from './SesionExpiradaModal';
 import NuevoMovimientoModal from './NuevoMovimientoModal';
 import PanelAprobacionesAdmin from './PanelAprobacionesAdmin';
 import Estaciones from './Estaciones';
+import ConsumiblesTab from './ConsumiblesTab';
 import { supabase } from './supabaseClient';
 
 export default function App() {
@@ -28,7 +29,8 @@ export default function App() {
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
   const [showExpiradoModal, setShowExpiradoModal] = useState(false);
 
-  const [vistaActiva, setVistaActiva] = useState('inventario'); // 'inventario' o 'solicitudes'
+  // Vista activa: 'inventario' | 'consumibles' | 'solicitudes' | 'estaciones'
+  const [vistaActiva, setVistaActiva] = useState('inventario'); 
   
   // Historial de Movimientos desde Supabase
   const [movimientos, setMovimientos] = useState([]);
@@ -81,69 +83,65 @@ export default function App() {
   }, [usuario]);
 
   const cargarActivos = async () => {
-  const { data, error } = await supabase
-    .from('activos')
-    .select(`
-      id,
-      qr,
-      inventario,
-      serial,
-      especificacion,
-      propiedad,
-      estado,
-      sedes ( id, nombre ),
-      bodegas ( id, nombre ),
-      estaciones ( id, nombre ),
-      tipos_activo ( id, nombre ),
-      marcas ( id, nombre )
-    `)
-    .order('id', { ascending: false });
+    const { data, error } = await supabase
+      .from('activos')
+      .select(`
+        id,
+        qr,
+        inventario,
+        serial,
+        especificacion,
+        propiedad,
+        estado,
+        sedes ( id, nombre ),
+        bodegas ( id, nombre ),
+        estaciones ( id, nombre ),
+        tipos_activo ( id, nombre ),
+        marcas ( id, nombre )
+      `)
+      .order('id', { ascending: false });
 
-  if (error) {
-    console.error('Error al cargar activos:', error);
-  } else {
-    setActivos(data);
-  }
-};
+    if (error) {
+      console.error('Error al cargar activos:', error);
+    } else {
+      setActivos(data);
+    }
+  };
+
+  
 
   const obtenerMovimientos = async () => {
-  // 1. Iniciamos la consulta base
-  let query = supabase
-    .from('movimientos')
-    .select(`
-      id,
-      estado,
-      observacion,
-      fecha_solicitud,
-      tecnico_id,
-      usuarios!movimientos_tecnico_id_fkey ( nombre ),
-      origen:bodegas!movimientos_bodega_origen_id_fkey ( nombre, sedes ( nombre ) ),
-      destino:bodegas!movimientos_bodega_destino_id_fkey ( nombre, sedes ( nombre ) ),
-      movimiento_detalles (
-        id,
-        tipo_item,
-        cantidad,
-        activos ( inventario, categoria ),
-        consumibles ( nombre )
-      )
-    `);
+  try {
+    const { data, error } = await supabase
+      .from('movimientos')
+      .select(`
+        *,
+        usuarios:tecnico_id ( id, nombre, rol ),
+        sedes(nombre),
+        bodega_origen:bodegas!bodega_origen_id(nombre),
+        bodega_destino:bodegas!bodega_destino_id(nombre),
+        estacion_origen:estaciones!estacion_origen_id(nombre),
+        estacion_destino:estaciones!estacion_destino_id(nombre),
+        movimiento_detalles (
+          id,
+          tipo_item,
+          cantidad,
+          estado_retorno_bodega,
+          activos!activo_id ( id, inventario, serial, especificacion ),
+          consumibles!consumible_id ( id, nombre )
+        )
+      `)
+      .order('fecha_solicitud', { ascending: false });
 
-  // 2. Si el usuario es técnico, filtramos solo sus movimientos
-  if (usuario.rol === 'tecnico') {
-    query = query.eq('tecnico_id', usuario.id);
-  }
+    if (error) throw error;
 
-  // 3. Ordenamos por fecha descendente y ejecutamos
-  const { data, error } = await query.order('fecha_solicitud', { ascending: false });
-
-  if (error) {
-    console.error('Error al cargar movimientos:', error);
-  } else if (data) {
+    console.log('Movimientos cargados:', data);
     setMovimientos(data);
+  } catch (err) {
+    console.error('Error al cargar movimientos:', err);
   }
 };
 
-  // Si no hay usuario activo, renderiza únicamente Login
   if (!usuario) {
     return <Login onLogin={handleLogin} />;
   }
@@ -158,11 +156,11 @@ export default function App() {
   };
 
   const activosFiltrados = activos.filter(activo => {
-    const coincideSede = sedeFiltro === 'Todas' || activo.sede === sedeFiltro;
+    const coincideSede = sedeFiltro === 'Todas' || activo.sedes?.nombre === sedeFiltro;
     const terminoBusqueda = busqueda.toLowerCase();
-    const coincideBusqueda = activo.inventario.toLowerCase().includes(terminoBusqueda) || 
-                             activo.serial.toLowerCase().includes(terminoBusqueda) ||
-                             activo.qr.toLowerCase().includes(terminoBusqueda);
+    const coincideBusqueda = (activo.inventario || '').toLowerCase().includes(terminoBusqueda) || 
+                             (activo.serial || '').toLowerCase().includes(terminoBusqueda) ||
+                             (activo.qr || '').toLowerCase().includes(terminoBusqueda);
     return coincideSede && coincideBusqueda;
   });
 
@@ -200,219 +198,230 @@ export default function App() {
         </div>
       </header>
 
-    {/* Subbarram/Pestañas de Navegación Superior */}
-<div className="bg-slate-900 border-t border-slate-800 shadow-md">
-  <div className="max-w-6xl mx-auto px-4 sm:px-6 flex gap-2">
-    <button
-      onClick={() => setVistaActiva('inventario')}
-      className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
-        vistaActiva === 'inventario'
-          ? 'border-blue-500 text-blue-400 bg-slate-800/50'
-          : 'border-transparent text-slate-400 hover:text-slate-200'
-      }`}
-    >
-      <Box className="w-4 h-4" />
-      Inventario de Activos
-    </button>
+      {/* Subbarra/Pestañas de Navegación Superior */}
+      <div className="bg-slate-900 border-t border-slate-800 shadow-md">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex gap-2 overflow-x-auto">
+          {/* Pestaña Inventario */}
+          <button
+            onClick={() => setVistaActiva('inventario')}
+            className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+              vistaActiva === 'inventario'
+                ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Box className="w-4 h-4" />
+            Inventario de Activos
+          </button>
 
-    <button
-      onClick={() => setVistaActiva('solicitudes')}
-      className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
-        vistaActiva === 'solicitudes'
-          ? 'border-blue-500 text-blue-400 bg-slate-800/50'
-          : 'border-transparent text-slate-400 hover:text-slate-200'
-      }`}
-    >
-      <ArrowRightLeft className="w-4 h-4" />
-      Gestión de Solicitudes
-    </button>
+          {/* Pestaña Consumibles */}
+          <button
+              onClick={() => setVistaActiva('consumibles')}
+              className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+                vistaActiva === 'consumibles'
+                  ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Boxes className="w-4 h-4" />
+              Consumibles
+          </button>
 
-    <button
-      onClick={() => setVistaActiva('estaciones')}
-      className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors ${
-        vistaActiva === 'estaciones'
-          ? 'border-blue-500 text-blue-400 bg-slate-800/50'
-          : 'border-transparent text-slate-400 hover:text-slate-200'
-      }`}
-    >
-      <Radio className="w-4 h-4" />
-      Estaciones
-    </button>
+          {/* Pestaña Solicitudes */}
+          <button
+            onClick={() => setVistaActiva('solicitudes')}
+            className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+              vistaActiva === 'solicitudes'
+                ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            Gestión de Solicitudes
+          </button>
 
-  </div>
-
-  
-</div>
-        
-   <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
-
-  {/* PESTAÑA 1: INVENTARIO DE ACTIVOS */}
-  {vistaActiva === 'inventario' && (
-    <>
-      {/* Barra superior de Inventario: Solo la búsqueda */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex justify-between items-center">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Buscar por Inventario o Serie..." 
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          {/* Pestaña Estaciones */}
+          <button
+            onClick={() => setVistaActiva('estaciones')}
+            className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+              vistaActiva === 'estaciones'
+                ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Radio className="w-4 h-4" />
+            Estaciones
+          </button>
         </div>
       </div>
+        
+      <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
 
-      {/* Tabla de Inventario de Activos Fijos */}
-<div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-  <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
-    <h2 className="font-bold text-slate-800 text-base">Inventario de Activos Fijos</h2>
-    <button 
-      onClick={() => setIsNuevoModalOpen(true)}
-      className="flex-1 sm:flex-none justify-center bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
-    >
-      <Plus className="w-4 h-4" /> Nuevo Activo
-    </button>
-  </div>
+        {/* PESTAÑA 1: INVENTARIO DE ACTIVOS */}
+        {vistaActiva === 'inventario' && (
+          <>
+            {/* Búsqueda */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex justify-between items-center">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Buscar por Inventario o Serie..." 
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
 
-  <div className="overflow-x-auto">
-    <table className="w-full text-left text-xs sm:text-sm text-slate-600">
-      <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
-        <tr>
-          <th className="px-4 sm:px-6 py-3">Código QR</th>
-          <th className="px-4 sm:px-6 py-3">No. Inventario / Serie</th>
-          <th className="px-4 sm:px-6 py-3">Equipo</th>
-          <th className="px-4 sm:px-6 py-3">Ubicación Actual</th>
-          <th className="px-4 sm:px-6 py-3">Propiedad</th>
-          <th className="px-4 sm:px-6 py-3">Estado</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {activosFiltrados.length === 0 ? (
-          <tr>
-            <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
-              No se encontraron activos registrados.
-            </td>
-          </tr>
-        ) : (
-          activosFiltrados.map((activo) => {
-            // Determinar si el activo está en Bodega o en Estación
-            const ubicacionNombre = activo.bodegas?.nombre 
-              ? `Bodega: ${activo.bodegas.nombre}`
-              : activo.estaciones?.nombre 
-              ? `Estación: ${activo.estaciones.nombre}`
-              : 'Sin Ubicación';
+            {/* Tabla de Activos Fijos */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+                <h2 className="font-bold text-slate-800 text-base">Inventario de Activos Fijos</h2>
+                <button 
+                  onClick={() => setIsNuevoModalOpen(true)}
+                  className="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
+                  >
+                  <Plus className="w-4 h-4" /> Nuevo Activo
+                </button>
+              </div>
 
-            const esBodega = Boolean(activo.bodegas?.nombre);
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm text-slate-600">
+                  <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 sm:px-6 py-3">Código QR</th>
+                      <th className="px-4 sm:px-6 py-3">No. Inventario / Serie</th>
+                      <th className="px-4 sm:px-6 py-3">Equipo</th>
+                      <th className="px-4 sm:px-6 py-3">Ubicación Actual</th>
+                      <th className="px-4 sm:px-6 py-3">Propiedad</th>
+                      <th className="px-4 sm:px-6 py-3">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {activosFiltrados.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
+                          No se encontraron activos registrados.
+                        </td>
+                      </tr>
+                    ) : (
+                      activosFiltrados.map((activo) => {
+                        const ubicacionNombre = activo.bodegas?.nombre 
+                          ? `Bodega: ${activo.bodegas.nombre}`
+                          : activo.estaciones?.nombre 
+                          ? `Estación: ${activo.estaciones.nombre}`
+                          : 'Sin Ubicación';
 
-            return (
-              <tr key={activo.id} className="hover:bg-slate-50 transition-colors">
-                {/* QR */}
-                <td className="px-4 sm:px-6 py-3.5 font-mono text-[11px] font-semibold text-blue-600">
-                  <span className="bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                    {activo.qr}
-                  </span>
-                </td>
+                        const esBodega = Boolean(activo.bodegas?.nombre);
 
-                {/* Inventario y Serial */}
-                <td className="px-4 sm:px-6 py-3.5">
-                  <div className="font-semibold text-slate-900 font-mono">{activo.inventario}</div>
-                  <div className="text-[11px] font-mono text-slate-400">SN: {activo.serial}</div>
-                </td>
+                        return (
+                          <tr key={activo.id} className="hover:bg-slate-50 transition-colors">
+                            {/* QR */}
+                            <td className="px-4 sm:px-6 py-3.5 font-mono text-[11px] font-semibold text-blue-600">
+                              <span className="bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                {activo.qr}
+                              </span>
+                            </td>
 
-                {/* Tipo, Marca y Especificación */}
-                <td className="px-4 sm:px-6 py-3.5">
-                  <div className="font-medium text-slate-800">
-                    {activo.tipos_activo?.nombre || 'General'} - {activo.marcas?.nombre || 'N/A'}
-                  </div>
-                  {activo.especificacion && (
-                    <div className="text-[11px] text-slate-500 truncate max-w-[200px]">
-                      {activo.especificacion}
-                    </div>
-                  )}
-                </td>
+                            {/* Inventario y Serial */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <div className="font-semibold text-slate-900 font-mono">{activo.inventario}</div>
+                              <div className="text-[11px] font-mono text-slate-400">SN: {activo.serial}</div>
+                            </td>
 
-                {/* Ubicación (Bodega o Estación + Sede) */}
-                <td className="px-4 sm:px-6 py-3.5">
-                  <div className={`font-medium ${esBodega ? 'text-blue-700' : 'text-purple-700'}`}>
-                    {ubicacionNombre}
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    {activo.sedes?.nombre || 'Sede N/A'}
-                  </div>
-                </td>
+                            {/* Tipo, Marca y Especificación */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <div className="font-medium text-slate-800">
+                                {activo.tipos_activo?.nombre || 'General'} - {activo.marcas?.nombre || 'N/A'}
+                              </div>
+                              {activo.especificacion && (
+                                <div className="text-[11px] text-slate-500 truncate max-w-[200px]">
+                                  {activo.especificacion}
+                                </div>
+                              )}
+                            </td>
 
-                {/* Propiedad */}
-                <td className="px-4 sm:px-6 py-3.5">
-                  <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
-                    activo.propiedad === 'Leasing'
-                      ? 'bg-purple-50 text-purple-700 border-purple-200'
-                      : 'bg-slate-100 text-slate-700 border-slate-200'
-                  }`}>
-                    {activo.propiedad || 'Propio'}
-                  </span>
-                </td>
+                            {/* Ubicación (Bodega o Estación + Sede) */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <div className={`font-medium ${esBodega ? 'text-blue-700' : 'text-purple-700'}`}>
+                                {ubicacionNombre}
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                {activo.sedes?.nombre || 'Sede N/A'}
+                              </div>
+                            </td>
 
-                {/* Estado Operativo */}
-                <td className="px-4 sm:px-6 py-3.5">
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                    activo.estado === 'Disponible'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : activo.estado === 'Asignado'
-                      ? 'bg-blue-100 text-blue-700'
-                      : activo.estado === 'En diagnostico'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-rose-100 text-rose-700'
-                  }`}>
-                    {activo.estado}
-                  </span>
-                </td>
-              </tr>
-            );
-          })
+                            {/* Propiedad */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                                activo.propiedad === 'Leasing'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}>
+                                {activo.propiedad || 'Propio'}
+                              </span>
+                            </td>
+
+                            {/* Estado Operativo */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                                activo.estado === 'Disponible'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : activo.estado === 'Asignado'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : activo.estado === 'En diagnostico'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}>
+                                {activo.estado}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
-      </tbody>
-    </table>
-  </div>
-</div>
-    </>
-  )}
 
-  {/* PESTAÑA 2: GESTIÓN DE SOLICITUDES */}
-  {vistaActiva === 'solicitudes' && (
-    <div className="space-y-4">
-      {/* Botón de Acción para Solicitar Traslado */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex justify-end">
-        <button 
-          onClick={() => setIsMovimientoModalOpen(true)}
-          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors shadow-xs"
-        >
-          <ArrowRightLeft className="w-4 h-4" /> Solicitar Traslado Multiactivo
-        </button>
-      </div>
-
-      {/* Componente del Panel de Solicitudes */}
-      <PanelAprobacionesAdmin 
-        movimientos={movimientos}
-        usuarioAdmin={usuario}
-        onMovimientoProcesado={() => {
-          obtenerMovimientos();
-          obtenerActivos();
-        }}
-      />
-    </div>
-  )}
-
-
-{vistaActiva === 'estaciones' && (
-          <Estaciones 
-            userRole={usuario.rol} 
-            
-          />
+        {/* PESTAÑA 2: CONSUMIBLES */}
+        {vistaActiva === 'consumibles' && (
+          <ConsumiblesTab />
         )}
-  
 
-</main>
+        {/* PESTAÑA 3: GESTIÓN DE SOLICITUDES */}
+        {vistaActiva === 'solicitudes' && (
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex justify-end">
+              <button 
+                onClick={() => setIsMovimientoModalOpen(true)}
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors shadow-xs"
+              >
+                <ArrowRightLeft className="w-4 h-4" /> Solicitar Traslado Multiactivo
+              </button>
+            </div>
+
+            <PanelAprobacionesAdmin 
+              movimientos={movimientos}
+              usuarioAdmin={usuario}
+              onMovimientoProcesado={() => {
+                obtenerMovimientos();
+                cargarActivos();
+              }}
+            />
+          </div>
+        )}
+
+        {/* PESTAÑA 4: ESTACIONES */}
+        {vistaActiva === 'estaciones' && (
+          <Estaciones userRole={usuario.rol} />
+        )}
+
+      </main>
 
       {/* Modales */}
       <NuevoActivoModal 
