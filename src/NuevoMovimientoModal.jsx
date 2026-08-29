@@ -125,7 +125,7 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
       console.error('Error al cargar estaciones:', err);
     }
   };
-
+/*
   // Cargar Activos y Consumibles disponibles según el origen
   const cargarItemsDisponibles = async () => {
     try {
@@ -185,7 +185,204 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
     } catch (err) {
       console.error('Error al cargar ítems disponibles:', err);
     }
-  };
+  };*/
+/*
+  // Cargar Activos y Consumibles disponibles según el origen
+const cargarItemsDisponibles = async () => {
+  try {
+    if (tipoMovimiento === 'bodega_a_estacion') {
+      // -------------------------------------------------------------
+      // BODEGA -> ESTACIÓN (Consulta directa a inventario de bodega)
+      // -------------------------------------------------------------
+      let queryActivos = supabase
+        .from('activos')
+        .select('id, inventario, serial, estado, especificacion')
+        .eq('sede_id', parseInt(sedeId, 10))
+        .is('estacion_id', null)
+        .eq('estado', 'Disponible');
+
+      if (bodegaInfo?.id) {
+        queryActivos = queryActivos.eq('bodega_id', bodegaInfo.id);
+      }
+
+      const { data: dataActivos, error: errAct } = await queryActivos;
+      if (errAct) console.error('Error activos:', errAct);
+      setActivosDisponibles(dataActivos || []);
+
+      let queryConsumibles = supabase
+        .from('consumibles')
+        .select('id, nombre, cantidad_stock')
+        .eq('sede_id', parseInt(sedeId, 10))
+        .gt('cantidad_stock', 0)
+        .is('estacion_id', null);
+
+      if (bodegaInfo?.id) {
+        queryConsumibles = queryConsumibles.eq('bodega_id', bodegaInfo.id);
+      }
+
+      const { data: dataConsumibles, error: errCons } = await queryConsumibles;
+      if (errCons) console.error('Error consumibles:', errCons);
+      setConsumiblesDisponibles(dataConsumibles || []);
+
+    } else {
+      // -------------------------------------------------------------
+      // ESTACIÓN -> BODEGA / ESTACIÓN (Consulta basada en historial)
+      // -------------------------------------------------------------
+      if (!estacionOrigenId) {
+        setActivosDisponibles([]);
+        setConsumiblesDisponibles([]);
+        return;
+      }
+
+      const idEstacionNum = parseInt(estacionOrigenId, 10);
+
+      // 1. Cargar Activos asignados a la estación
+      const { data: dataActivos } = await supabase
+        .from('activos')
+        .select('id, inventario, serial, estado, especificacion')
+        .eq('estacion_id', idEstacionNum);
+      
+      setActivosDisponibles(dataActivos || []);
+
+      // 2. Obtener movimientos APROBADOS donde esta estación fue DESTINO (Entradas)
+      const { data: movEntradas, error: errEntradas } = await supabase
+        .from('movimientos')
+        .select(`
+          id,
+          movimiento_detalles (
+            tipo_item,
+            cantidad,
+            consumible_id,
+            consumibles ( id, nombre )
+          )
+        `)
+        .eq('estacion_destino_id', idEstacionNum)
+        .eq('estado', 'aprobado');
+
+      if (errEntradas) console.error('Error al consultar entradas de consumibles:', errEntradas);
+
+     
+const { data: dataConsumibles, error: errCons } = await supabase
+  .from('consumibles')
+  .select('id, nombre, cantidad_stock')
+  .eq('estacion_id', parseInt(estacionOrigenId, 10))
+  .gt('cantidad_stock', 0);
+
+setConsumiblesDisponibles(dataConsumibles || []);
+
+      // 4. Calcular balance neto de consumibles por ID
+      const balanceConsumibles = {};
+
+      // Sumar Entradas
+      movEntradas?.forEach(mov => {
+        mov.movimiento_detalles?.forEach(det => {
+          if (det.tipo_item === 'consumible' && det.consumible_id) {
+            const id = det.consumible_id;
+            const nombre = det.consumibles?.nombre || 'Consumible sin nombre';
+            const cant = Number(det.cantidad) || 0;
+
+            if (!balanceConsumibles[id]) {
+              balanceConsumibles[id] = { id, nombre, cantidad_stock: 0 };
+            }
+            balanceConsumibles[id].cantidad_stock += cant;
+          }
+        });
+      });
+
+      // Restar Salidas
+      movSalidas?.forEach(mov => {
+        mov.movimiento_detalles?.forEach(det => {
+          if (det.tipo_item === 'consumible' && det.consumible_id) {
+            const id = det.consumible_id;
+            const cant = Number(det.cantidad) || 0;
+
+            if (balanceConsumibles[id]) {
+              balanceConsumibles[id].cantidad_stock -= cant;
+            }
+          }
+        });
+      });
+
+      // 5. Filtrar solo aquellos consumibles con stock neto > 0
+      const listaConsumiblesEstacion = Object.values(balanceConsumibles)
+        .filter(c => c.cantidad_stock > 0);
+
+      setConsumiblesDisponibles(listaConsumiblesEstacion);
+    }
+  } catch (err) {
+    console.error('Error al cargar ítems disponibles:', err);
+  }
+};*/
+  
+
+// Cargar Activos y Consumibles disponibles según el origen
+const cargarItemsDisponibles = async () => {
+  try {
+    if (tipoMovimiento === 'bodega_a_estacion') {
+      // 1. ORIGEN BODEGA (Traer de bodega_id / sede_id)
+      let queryActivos = supabase
+        .from('activos')
+        .select('id, inventario, serial, estado, especificacion')
+        .eq('sede_id', parseInt(sedeId, 10))
+        .is('estacion_id', null)
+        .eq('estado', 'Disponible');
+
+      if (bodegaInfo?.id) {
+        queryActivos = queryActivos.eq('bodega_id', bodegaInfo.id);
+      }
+
+      const { data: dataActivos, error: errAct } = await queryActivos;
+      if (errAct) console.error('Error activos bodega:', errAct);
+      setActivosDisponibles(dataActivos || []);
+
+      let queryConsumibles = supabase
+        .from('consumibles')
+        .select('id, nombre, cantidad_stock')
+        .eq('sede_id', parseInt(sedeId, 10))
+        .gt('cantidad_stock', 0)
+        .is('estacion_id', null);
+
+      if (bodegaInfo?.id) {
+        queryConsumibles = queryConsumibles.eq('bodega_id', bodegaInfo.id);
+      }
+
+      const { data: dataConsumibles, error: errCons } = await queryConsumibles;
+      if (errCons) console.error('Error consumibles bodega:', errCons);
+      setConsumiblesDisponibles(dataConsumibles || []);
+
+    } else {
+      // 2. ORIGEN ESTACIÓN (Consulta directa a la tabla consumibles por estacion_id)
+      if (!estacionOrigenId) {
+        setActivosDisponibles([]);
+        setConsumiblesDisponibles([]);
+        return;
+      }
+
+      const idEstacionNum = parseInt(estacionOrigenId, 10);
+
+      // Traer activos asignados a la estación
+      const { data: dataActivos, error: errActEst } = await supabase
+        .from('activos')
+        .select('id, inventario, serial, estado, especificacion')
+        .eq('estacion_id', idEstacionNum);
+
+      if (errActEst) console.error('Error activos estación:', errActEst);
+      setActivosDisponibles(dataActivos || []);
+
+      // Traer consumibles asignados directamente a la estación
+      const { data: dataConsumibles, error: errConsEst } = await supabase
+        .from('consumibles')
+        .select('id, nombre, cantidad_stock')
+        .eq('estacion_id', idEstacionNum)
+        .gt('cantidad_stock', 0);
+
+      if (errConsEst) console.error('Error consumibles estación:', errConsEst);
+      setConsumiblesDisponibles(dataConsumibles || []);
+    }
+  } catch (err) {
+    console.error('Error al cargar ítems disponibles:', err);
+  }
+};
 
   const handleCambioTipoMovimiento = (nuevoTipo) => {
     setTipoMovimiento(nuevoTipo);
@@ -470,7 +667,17 @@ export default function NuevoMovimientoModal({ isOpen, onClose, usuario, onMovim
                 {tipoMovimiento === 'estacion_a_bodega' ? (
                   <div className="text-xs border border-slate-200 rounded-lg p-2.5 bg-slate-100 font-semibold text-slate-700 flex items-center gap-2">
                     <Package className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>{bodegaInfo ? bodegaInfo.Nombre : 'Cargando bodega...'}</span>
+                    <span>
+                        {bodegaInfo
+                          ? (bodegaInfo.Nombre || bodegaInfo.nombre)
+                          : (
+                              sedeId === '1' ? 'BCPC1' :
+                              sedeId === '2' ? 'BCPC2' :
+                              sedeId === '3' ? 'BCPZ4' :
+                              sedeId === '4' ? 'BCR383' : 'Bodega Central'
+                            )
+                        }
+                    </span>
                   </div>
                 ) : (
                   <select
