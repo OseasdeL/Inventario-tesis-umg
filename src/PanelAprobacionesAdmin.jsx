@@ -8,12 +8,15 @@ export default function PanelAprobacionesAdmin({ movimientos = [], usuarioAdmin,
 
   const pendientes = movimientos.filter(m => m.estado?.toLowerCase() === 'pendiente');
   const historial = movimientos.filter(m => m.estado?.toLowerCase() !== 'pendiente');
-/*
+
   const manejarAprobacion = async (movimientoId, nuevoEstado) => {
     if (!esAdmin) return;
 
     try {
-      // 1. Actualizar estado de la solicitud principal
+      console.log('=== INICIO APROBACIÓN ===');
+      console.log('1. ID Movimiento:', movimientoId, 'Nuevo Estado:', nuevoEstado);
+
+      // 1. Actualizar estado del movimiento
       const { error: errorMov } = await supabase
         .from('movimientos')
         .update({ 
@@ -25,24 +28,25 @@ export default function PanelAprobacionesAdmin({ movimientos = [], usuarioAdmin,
 
       if (errorMov) throw errorMov;
 
-      // 2. Procesar ítems solo si se aprueba la solicitud
       if (nuevoEstado === 'aprobado') {
         const movActual = movimientos.find(m => m.id === movimientoId);
+        console.log('2. Objeto movActual encontrado:', movActual);
 
         if (movActual) {
           const detalles = movActual.movimiento_detalles || [];
+          console.log('3. Detalles del movimiento:', detalles);
 
-          // ==========================================
           // A. PROCESAMIENTO DE ACTIVOS FIJOS
-          // ==========================================
-          const activosATransferir = detalles
-            .filter(d => d.tipo_item === 'activo' && d.activos?.id)
-            .map(d => d.activos.id);
+         const activosATransferir = detalles
+            .filter(d => d.tipo_item === 'activo' && (d.activo_id || d.activos?.id))
+            .map(d => d.activo_id || d.activos?.id);
+
+          console.log('Activos a transferir encontrados:', activosATransferir);
 
           if (activosATransferir.length > 0) {
-            if (movActual.tipo_destino === 'estacion') {
-              // De Bodega/Estación -> Estación
-              await supabase
+            // A.1) Si va hacia una ESTACIÓN
+            if (movActual.tipo_destino === 'estacion' || movActual.estacion_destino_id) {
+              const { error: errActivos } = await supabase
                 .from('activos')
                 .update({ 
                   estacion_id: movActual.estacion_destino_id,
@@ -51,9 +55,11 @@ export default function PanelAprobacionesAdmin({ movimientos = [], usuarioAdmin,
                 })
                 .in('id', activosATransferir);
 
-            } else if (movActual.tipo_destino === 'bodega') {
-              // De Bodega/Estación -> Bodega
-              await supabase
+              if (errActivos) console.error('Error al actualizar activos a estación:', errActivos);
+            } 
+            // A.2) Si va hacia una BODEGA
+            else if (movActual.tipo_destino === 'bodega' || movActual.bodega_destino_id) {
+              const { error: errActivos } = await supabase
                 .from('activos')
                 .update({ 
                   bodega_id: movActual.bodega_destino_id,
@@ -61,206 +67,120 @@ export default function PanelAprobacionesAdmin({ movimientos = [], usuarioAdmin,
                   estado: 'Disponible'
                 })
                 .in('id', activosATransferir);
+
+              if (errActivos) console.error('Error al actualizar activos a bodega:', errActivos);
             }
           }
+          // ==========================================
+          // B. PROCESAMIENTO COMPLETO DE CONSUMIBLES
+          // ==========================================
+          const consumiblesATransferir = detalles.filter(d => d.tipo_item === 'consumible');
 
-          /// ==========================================
-// B. PROCESAMIENTO DE CONSUMIBLES
-// ==========================================
-const consumiblesATransferir = detalles.filter(
-  d => d.tipo_item === 'consumible'
-);
+          for (const det of consumiblesATransferir) {
+            const consumibleOrigenId = det.consumible_id || det.consumibles?.id;
+            const cantidadTrasladada = Number(det.cantidad) || 0;
+            const nombreConsumible = det.consumibles?.nombre;
 
-for (const det of consumiblesATransferir) {
-  // Extraer el ID de consumible de forma segura
-  const consumibleId = det.consumible_id || det.consumibles?.id;
-  const cantidadTrasladada = Number(det.cantidad) || 0;
+            if (!consumibleOrigenId || cantidadTrasladada <= 0) continue;
 
-  if (!consumibleId || cantidadTrasladada <= 0) continue;
+            // 1. DESCONTAR STOCK DEL ORIGEN (Sea Bodega o Estación)
+            const { data: consumibleOrigen, error: errFetchOrigen } = await supabase
+              .from('consumibles')
+              .select('cantidad_stock, nombre, descripcion, stock_minimo')
+              .eq('id', consumibleOrigenId)
+              .maybeSingle();
 
-  // 1. DESCONTAR STOCK SI EXISTE BODEGA ORIGEN
-  // Se evalúa bodega_origen_id directamente sin depender del string tipo_origen
-  const esOrigenBodega = movActual.bodega_origen_id || 
-                         movActual.tipo_origen?.toLowerCase() === 'bodega';
+            if (errFetchOrigen) console.error('Error al consultar stock de origen:', errFetchOrigen);
 
-  if (esOrigenBodega && movActual.bodega_origen_id) {
-    // Consultar stock actual
-    const { data: consumibleOrigen, error: errFetch } = await supabase
-      .from('consumibles')
-      .select('stock')
-      .eq('id', consumibleId)
-      .maybeSingle();
+            if (consumibleOrigen) {
+              const stockActual = Number(consumibleOrigen.cantidad_stock) || 0;
+              const nuevoStock = Math.max(0, stockActual - cantidadTrasladada);
 
-    if (errFetch) {
-      console.error('Error al consultar consumible:', errFetch);
-    }
+              const { error: errUpdateOrigen } = await supabase
+                .from('consumibles')
+                .update({ cantidad_stock: nuevoStock })
+                .eq('id', consumibleOrigenId);
 
-    if (consumibleOrigen) {
-      const stockActual = Number(consumibleOrigen.stock) || 0;
-      const nuevoStock = Math.max(0, stockActual - cantidadTrasladada);
+              if (errUpdateOrigen) {
+                console.error('Error al descontar stock en el origen:', errUpdateOrigen);
+              }
+            }
 
-      const { error: errUpdate } = await supabase
-        .from('consumibles')
-        .update({ stock: nuevoStock })
-        .eq('id', consumibleId);
+            // Nombre y detalles del consumible a trasladar
+            const nombreFinal = nombreConsumible || consumibleOrigen?.nombre || 'Consumible';
+            const descFinal = det.consumibles?.descripcion || consumibleOrigen?.descripcion || '';
+            const minStockFinal = det.consumibles?.stock_minimo || consumibleOrigen?.stock_minimo || 0;
 
-      if (errUpdate) {
-        console.error('Error al descontar stock:', errUpdate);
-      } else {
-        console.log(`✅ Stock descontado correctamente: de ${stockActual} a ${nuevoStock}`);
-      }
-    }
-  }
+            // 2. SUMAR O CREAR REGISTRO SI EL DESTINO ES UNA ESTACIÓN
+            if (movActual.tipo_destino === 'estacion' && movActual.estacion_destino_id) {
+              const { data: consumibleEstacionDestino } = await supabase
+                .from('consumibles')
+                .select('id, cantidad_stock')
+                .eq('estacion_id', movActual.estacion_destino_id)
+                .eq('nombre', nombreFinal)
+                .maybeSingle();
 
-  // 2. SUMAR STOCK SI EL DESTINO ES UNA BODEGA
-  const esDestinoBodega = movActual.bodega_destino_id || 
-                          movActual.tipo_destino?.toLowerCase() === 'bodega';
+              if (consumibleEstacionDestino) {
+                // Si la estación ya cuenta con este consumible, incrementamos su stock
+                const stockExistente = Number(consumibleEstacionDestino.cantidad_stock) || 0;
+                await supabase
+                  .from('consumibles')
+                  .update({ cantidad_stock: stockExistente + cantidadTrasladada })
+                  .eq('id', consumibleEstacionDestino.id);
+              } else {
+                // Si la estación no lo posee, insertamos una nueva fila vinculada a su estacion_id
+                await supabase
+                  .from('consumibles')
+                  .insert([{
+                    nombre: nombreFinal,
+                    descripcion: descFinal,
+                    sede_id: movActual.sede_id,
+                    estacion_id: movActual.estacion_destino_id,
+                    bodega_id: null,
+                    cantidad_stock: cantidadTrasladada,
+                    stock_minimo: 0
+                  }]);
+              }
+            }
 
-  if (esDestinoBodega && movActual.bodega_destino_id) {
-    const { data: consumibleDestino } = await supabase
-      .from('consumibles')
-      .select('stock')
-      .eq('id', consumibleId)
-      .maybeSingle();
+            // 3. SUMAR O CREAR REGISTRO SI EL DESTINO ES UNA BODEGA
+            if (movActual.tipo_destino === 'bodega' && movActual.bodega_destino_id) {
+              const { data: consumibleBodegaDestino } = await supabase
+                .from('consumibles')
+                .select('id, cantidad_stock')
+                .eq('bodega_id', movActual.bodega_destino_id)
+                .eq('nombre', nombreFinal)
+                .maybeSingle();
 
-    if (consumibleDestino) {
-      const stockActual = Number(consumibleDestino.stock) || 0;
-      const nuevoStock = stockActual + cantidadTrasladada;
-
-      await supabase
-        .from('consumibles')
-        .update({ stock: nuevoStock })
-        .eq('id', consumibleId);
-    }
-  }
-}
-          
+              if (consumibleBodegaDestino) {
+                const stockExistente = Number(consumibleBodegaDestino.cantidad_stock) || 0;
+                await supabase
+                  .from('consumibles')
+                  .update({ cantidad_stock: stockExistente + cantidadTrasladada })
+                  .eq('id', consumibleBodegaDestino.id);
+              } else {
+                await supabase
+                  .from('consumibles')
+                  .insert([{
+                    nombre: nombreFinal,
+                    descripcion: descFinal,
+                    sede_id: movActual.sede_id,
+                    bodega_id: movActual.bodega_destino_id,
+                    estacion_id: null,
+                    cantidad_stock: cantidadTrasladada,
+                    stock_minimo: minStockFinal
+                  }]);
+              }
+            }
+          }
         }
-      }  
+      }
 
       if (onMovimientoProcesado) onMovimientoProcesado();
     } catch (err) {
-      console.error('Error al procesar la aprobación:', err);
+      console.error('Error general al procesar la aprobación:', err);
     }
-  };*/
-  
-  const manejarAprobacion = async (movimientoId, nuevoEstado) => {
-  if (!esAdmin) return;
-
-  try {
-    console.log('=== INICIO APROBACIÓN ===');
-    console.log('1. ID Movimiento:', movimientoId, 'Nuevo Estado:', nuevoEstado);
-
-    // 1. Actualizar estado del movimiento
-    const { error: errorMov } = await supabase
-      .from('movimientos')
-      .update({ 
-        estado: nuevoEstado,
-        aprobado_por_id: usuarioAdmin.id,
-        fecha_aprobacion: new Date().toISOString()
-      })
-      .eq('id', movimientoId);
-
-    if (errorMov) throw errorMov;
-
-    if (nuevoEstado === 'aprobado') {
-      const movActual = movimientos.find(m => m.id === movimientoId);
-      console.log('2. Objeto movActual encontrado:', movActual);
-
-      if (movActual) {
-        const detalles = movActual.movimiento_detalles || [];
-        console.log('3. Detalles del movimiento:', detalles);
-
-        // A. PROCESAMIENTO DE ACTIVOS FIJOS
-        const activosATransferir = detalles
-          .filter(d => d.tipo_item === 'activo' && d.activos?.id)
-          .map(d => d.activos.id);
-
-        if (activosATransferir.length > 0) {
-          if (movActual.tipo_destino === 'estacion') {
-            await supabase
-              .from('activos')
-              .update({ 
-                estacion_id: movActual.estacion_destino_id,
-                bodega_id: null,
-                estado: 'Asignado'
-              })
-              .in('id', activosATransferir);
-          } else if (movActual.tipo_destino === 'bodega') {
-            await supabase
-              .from('activos')
-              .update({ 
-                bodega_id: movActual.bodega_destino_id,
-                estacion_id: null,
-                estado: 'Disponible'
-              })
-              .in('id', activosATransferir);
-          }
-        }
-
-        // ==========================================
-// B. PROCESAMIENTO DE CONSUMIBLES
-// ==========================================
-const consumiblesATransferir = detalles.filter(d => d.tipo_item === 'consumible');
-
-for (const det of consumiblesATransferir) {
-  const consumibleId = det.consumible_id || det.consumibles?.id;
-  const cantidadTrasladada = Number(det.cantidad) || 0;
-
-  if (!consumibleId || cantidadTrasladada <= 0) continue;
-
-  // 1. DESCONTAR STOCK SI EL ORIGEN ES UNA BODEGA
-  if (movActual.bodega_origen_id || movActual.tipo_origen === 'bodega') {
-    const { data: consumibleOrigen, error: errFetch } = await supabase
-      .from('consumibles')
-      .select('cantidad_stock') // 👈 Corregido a cantidad_stock
-      .eq('id', consumibleId)
-      .maybeSingle();
-
-    if (errFetch) console.error('Error al consultar stock:', errFetch);
-
-    if (consumibleOrigen) {
-      const stockActual = Number(consumibleOrigen.cantidad_stock) || 0;
-      const nuevoStock = Math.max(0, stockActual - cantidadTrasladada);
-
-      const { error: errUpdate } = await supabase
-        .from('consumibles')
-        .update({ cantidad_stock: nuevoStock }) // 👈 Corregido a cantidad_stock
-        .eq('id', consumibleId);
-
-      if (errUpdate) {
-        console.error('Error al descontar stock:', errUpdate);
-      }
-    }
-  }
-
-  // 2. SUMAR STOCK SI EL DESTINO ES UNA BODEGA
-  if (movActual.bodega_destino_id || movActual.tipo_destino === 'bodega') {
-    const { data: consumibleDestino } = await supabase
-      .from('consumibles')
-      .select('cantidad_stock') // 👈 Corregido a cantidad_stock
-      .eq('id', consumibleId)
-      .maybeSingle();
-
-    if (consumibleDestino) {
-      const stockActual = Number(consumibleDestino.cantidad_stock) || 0;
-      const nuevoStock = stockActual + cantidadTrasladada;
-
-      await supabase
-        .from('consumibles')
-        .update({ cantidad_stock: nuevoStock }) // 👈 Corregido a cantidad_stock
-        .eq('id', consumibleId);
-    }
-  }
-}
-      }
-    }
-
-    if (onMovimientoProcesado) onMovimientoProcesado();
-  } catch (err) {
-    console.error('Error general al procesar la aprobación:', err);
-  }
-};
+  };
 
   const listaAMostrar = tabActiva === 'pendientes' ? pendientes : historial;
 
@@ -344,13 +264,13 @@ for (const det of consumiblesATransferir) {
                         onClick={() => manejarAprobacion(mov.id, 'rechazado')}
                         className="flex-1 sm:flex-none border border-rose-200 text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1"
                       >
-                        <XCircle className="w-3.5 h-3.5" /> Rechazar
+                        <XCircle className="w-3.5 h-3.5" /> Cancelar
                       </button>
                       <button
                         onClick={() => manejarAprobacion(mov.id, 'aprobado')}
                         className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg font-semibold text-xs transition-colors flex items-center justify-center gap-1 shadow-2xs"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Aprobar Traslado
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar Traslado
                       </button>
                     </div>
                   ) : (

@@ -24,8 +24,10 @@ export default function ConsumiblesTab() {
         cantidad_stock,
         stock_minimo,
         sedes ( id, nombre ),
-        bodegas ( id, nombre )
+        bodegas ( id, nombre ),
+        estaciones (id,nombre)
       `)
+      .or('bodega_id.not.is.null,cantidad_stock.gt.0')
       .order('nombre');
 
     if (error) {
@@ -60,7 +62,16 @@ export default function ConsumiblesTab() {
   // Cálculo de totales y métricas
   const totalTiposConsumibles = consumibles.length;
   const totalUnidadesStock = consumibles.reduce((acc, c) => acc + (c.cantidad_stock || 0), 0);
-  const consumiblesConStockBajo = consumibles.filter((c) => c.cantidad_stock <= c.stock_minimo).length;
+  // Contamos 'Stock Bajo' únicamente si es un registro de Bodega
+  const consumiblesConStockBajo = consumibles.filter(c => {
+    const esBodega = Boolean(c.bodega_id || c.bodegas?.nombre);
+    const stockActual = Number(c.cantidad_stock) || 0;
+    const stockMin = Number(c.stock_minimo) || 0;
+
+    return esBodega && stockActual <= stockMin;
+  }).length;
+
+  
 
   const consumiblesFiltrados = consumibles.filter(
     (c) =>
@@ -105,6 +116,7 @@ export default function ConsumiblesTab() {
           </div>
         </div>
       </div>
+      
 
       {/* TABLA Y CONTROLES */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
@@ -172,7 +184,11 @@ export default function ConsumiblesTab() {
                       {/* Ubicación */}
                       <td className="px-4 sm:px-6 py-3.5">
                         <div className="font-medium text-slate-800">
-                          {item.bodegas?.nombre ? `Bodega: ${item.bodegas.nombre}` : 'Sin Bodega'}
+                          {item.bodegas?.nombre 
+                            ? `Bodega: ${item.bodegas.nombre}` 
+                            : item.estaciones?.nombre 
+                            ? `Estación: ${item.estaciones.nombre}` 
+                            : 'Sin Ubicación'}
                         </div>
                         <div className="text-[11px] text-slate-400">
                           {item.sedes?.nombre || 'Sede N/A'}
