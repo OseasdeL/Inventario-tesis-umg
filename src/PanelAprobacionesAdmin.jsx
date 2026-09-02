@@ -125,7 +125,7 @@ export default function PanelAprobacionesAdmin({ movimientos = [], usuarioAdmin,
                 const stockExistente = Number(consumibleEstacionDestino.cantidad_stock) || 0;
                 await supabase
                   .from('consumibles')
-                  .update({ cantidad_stock: stockExistente + cantidadTrasladada })
+                  .update({ cantidad_stock: stockExistente + cantidadTrasladada, stock_minimo:0})
                   .eq('id', consumibleEstacionDestino.id);
               } else {
                 // Si la estación no lo posee, insertamos una nueva fila vinculada a su estacion_id

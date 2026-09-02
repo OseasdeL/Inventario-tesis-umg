@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Warehouse, Box, QrCode, ArrowRightLeft, Search, LogOut, Plus, History, Package, Radio, Boxes } from 'lucide-react';
+import { Building2, Warehouse, Box, QrCode, ArrowRightLeft, Search, LogOut, Plus, History, Package, Radio, Boxes, Users } from 'lucide-react';
 import Login from './Login';
 import NuevoActivoModal from './NuevoActivoModal';
 import ScannerQRModal from './ScannerQRModal';
@@ -8,6 +8,9 @@ import NuevoMovimientoModal from './NuevoMovimientoModal';
 import PanelAprobacionesAdmin from './PanelAprobacionesAdmin';
 import Estaciones from './Estaciones';
 import ConsumiblesTab from './ConsumiblesTab';
+import Sedes from './Sedes';
+import Bodegas from './Bodegas';
+import Usuarios from './Usuarios';
 import { supabase } from './supabaseClient';
 
 export default function App() {
@@ -29,7 +32,7 @@ export default function App() {
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
   const [showExpiradoModal, setShowExpiradoModal] = useState(false);
 
-  // Vista activa: 'inventario' | 'consumibles' | 'solicitudes' | 'estaciones'
+  // Vista activa: 'inventario' | 'consumibles' | 'solicitudes' | 'estaciones' | 'sedes' | 'bodegas' | 'usuarios'
   const [vistaActiva, setVistaActiva] = useState('inventario'); 
   
   // Historial de Movimientos desde Supabase
@@ -108,39 +111,37 @@ export default function App() {
     }
   };
 
-  
-
   const obtenerMovimientos = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('movimientos')
-      .select(`
-        *,
-        usuarios:tecnico_id ( id, nombre, rol ),
-        sedes(nombre),
-        bodega_origen:bodegas!bodega_origen_id(nombre),
-        bodega_destino:bodegas!bodega_destino_id(nombre),
-        estacion_origen:estaciones!estacion_origen_id(nombre),
-        estacion_destino:estaciones!estacion_destino_id(nombre),
-        movimiento_detalles (
-          id,
-          tipo_item,
-          cantidad,
-          estado_retorno_bodega,
-          activos!activo_id ( id, inventario, serial, especificacion ),
-          consumibles!consumible_id ( id, nombre )
-        )
-      `)
-      .order('fecha_solicitud', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('movimientos')
+        .select(`
+          *,
+          usuarios:tecnico_id ( id, nombre, rol ),
+          sedes(nombre),
+          bodega_origen:bodegas!bodega_origen_id(nombre),
+          bodega_destino:bodegas!bodega_destino_id(nombre),
+          estacion_origen:estaciones!estacion_origen_id(nombre),
+          estacion_destino:estaciones!estacion_destino_id(nombre),
+          movimiento_detalles (
+            id,
+            tipo_item,
+            cantidad,
+            estado_retorno_bodega,
+            activos!activo_id ( id, inventario, serial, especificacion ),
+            consumibles!consumible_id ( id, nombre )
+          )
+        `)
+        .order('fecha_solicitud', { ascending: false });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    console.log('Movimientos cargados:', data);
-    setMovimientos(data);
-  } catch (err) {
-    console.error('Error al cargar movimientos:', err);
-  }
-};
+      console.log('Movimientos cargados:', data);
+      setMovimientos(data);
+    } catch (err) {
+      console.error('Error al cargar movimientos:', err);
+    }
+  };
 
   if (!usuario) {
     return <Login onLogin={handleLogin} />;
@@ -216,15 +217,15 @@ export default function App() {
 
           {/* Pestaña Consumibles */}
           <button
-              onClick={() => setVistaActiva('consumibles')}
-              className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
-                vistaActiva === 'consumibles'
-                  ? 'border-blue-500 text-blue-400 bg-slate-800/50'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Boxes className="w-4 h-4" />
-              Consumibles
+            onClick={() => setVistaActiva('consumibles')}
+            className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+              vistaActiva === 'consumibles'
+                ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            Consumibles
           </button>
 
           {/* Pestaña Solicitudes */}
@@ -252,6 +253,50 @@ export default function App() {
             <Radio className="w-4 h-4" />
             Estaciones
           </button>
+
+          {/* Pestañas de Administración (EXCLUSIVAS PARA ADMIN) */}
+          {usuario.rol === 'admin' && (
+            <>
+              {/* Pestaña Sedes */}
+              <button
+                onClick={() => setVistaActiva('sedes')}
+                className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+                  vistaActiva === 'sedes'
+                    ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Building2 className="w-4 h-4" />
+                Sedes
+              </button>
+
+              {/* Pestaña Bodegas */}
+              <button
+                onClick={() => setVistaActiva('bodegas')}
+                className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+                  vistaActiva === 'bodegas'
+                    ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Warehouse className="w-4 h-4" />
+                Bodegas
+              </button>
+
+              {/* Pestaña Usuarios */}
+              <button
+                onClick={() => setVistaActiva('usuarios')}
+                className={`py-3 px-4 text-xs sm:text-sm font-semibold flex items-center gap-2 border-b-2 whitespace-nowrap transition-colors ${
+                  vistaActiva === 'usuarios'
+                    ? 'border-blue-500 text-blue-400 bg-slate-800/50'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                Usuarios
+              </button>
+            </>
+          )}
         </div>
       </div>
         
@@ -281,7 +326,7 @@ export default function App() {
                 <button 
                   onClick={() => setIsNuevoModalOpen(true)}
                   className="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
-                  >
+                >
                   <Plus className="w-4 h-4" /> Nuevo Activo
                 </button>
               </div>
@@ -419,6 +464,30 @@ export default function App() {
         {/* PESTAÑA 4: ESTACIONES */}
         {vistaActiva === 'estaciones' && (
           <Estaciones userRole={usuario.rol} />
+        )}
+
+        {/* PESTAÑA 5: SEDES (SOLO ADMIN) */}
+        {vistaActiva === 'sedes' && usuario.rol === 'admin' && (
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
+            <h2 className="text-base font-bold text-slate-800 mb-2">Gestión de Sedes</h2>
+            <Sedes usuario={usuario}/>
+          </div>
+        )}
+
+        {/* PESTAÑA 6: BODEGAS (SOLO ADMIN) */}
+        {vistaActiva === 'bodegas' && usuario.rol === 'admin' && (
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
+            <h2 className="text-base font-bold text-slate-800 mb-2">Gestión de Bodegas</h2>
+            <Bodegas usuario={usuario} />
+          </div>
+        )}
+
+        {/* PESTAÑA 7: USUARIOS (SOLO ADMIN) */}
+        {vistaActiva === 'usuarios' && usuario.rol === 'admin' && (
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
+            <h2 className="text-base font-bold text-slate-800 mb-2">Gestión de Usuarios</h2>
+            <Usuarios usuario={usuario} />
+          </div>
         )}
 
       </main>
