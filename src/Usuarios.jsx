@@ -222,6 +222,7 @@ export default function Usuarios({ usuario }) {
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           {/* Botón Switch Modo Claro/Oscuro */}
+          {/*}
           <button
             type="button"
             onClick={toggleDarkMode}
@@ -229,7 +230,7 @@ export default function Usuarios({ usuario }) {
             title={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           >
             {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-          </button>
+          </button>*/}
 
           <button
             onClick={abrirModalCrear}
@@ -241,7 +242,8 @@ export default function Usuarios({ usuario }) {
       </div>
 
       {/* Tabla de Usuarios */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs overflow-hidden transition-colors">
+      {/*<div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs overflow-hidden transition-colors">*/}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
           <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           <h2 className="font-bold text-slate-800 dark:text-slate-100 text-base">Listado de Usuarios</h2>

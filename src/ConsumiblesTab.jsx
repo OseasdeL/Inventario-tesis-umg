@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Package, AlertTriangle, Boxes, Search } from 'lucide-react';
+import { Plus, Minus, Package, AlertTriangle, Boxes, Search, Upload } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import NuevoConsumibleModal from './NuevoConsumibleModal';
+import ImportarCSVModal from './ImportarCSVModal'; 
 
-export default function ConsumiblesTab() {
+export default function ConsumiblesTab({ usuario }) {
   const [consumibles, setConsumibles] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false); // <--- ESTADO DEL MODAL CSV
   const [loading, setLoading] = useState(true);
+
+  const rolNormalizado = (usuario?.rol || usuario?.role || usuario?.tipo_usuario || '').toString().toLowerCase();
+  const esAdmin = rolNormalizado === 'admin' || rolNormalizado === 'administrador';
 
   useEffect(() => {
     cargarConsumibles();
@@ -38,12 +43,12 @@ export default function ConsumiblesTab() {
     setLoading(false);
   };
 
-  // Función para aumentar o reducir stock directamente en la tabla
   const ajustarStock = async (id, delta, stockActual) => {
+    if (!esAdmin) return;
+
     const nuevoStock = stockActual + delta;
     if (nuevoStock < 0) return;
 
-    // Actualización optimista en UI
     setConsumibles((prev) =>
       prev.map((item) => (item.id === id ? { ...item, cantidad_stock: nuevoStock } : item))
     );
@@ -55,14 +60,13 @@ export default function ConsumiblesTab() {
 
     if (error) {
       console.error('Error al actualizar el stock:', error);
-      cargarConsumibles(); // Revertir en caso de falla
+      cargarConsumibles();
     }
   };
 
-  // Cálculo de totales y métricas
   const totalTiposConsumibles = consumibles.length;
   const totalUnidadesStock = consumibles.reduce((acc, c) => acc + (c.cantidad_stock || 0), 0);
-  // Contamos 'Stock Bajo' únicamente si es un registro de Bodega
+  
   const consumiblesConStockBajo = consumibles.filter(c => {
     const esBodega = Boolean(c.bodega_id || c.bodegas?.nombre);
     const stockActual = Number(c.cantidad_stock) || 0;
@@ -70,8 +74,6 @@ export default function ConsumiblesTab() {
 
     return esBodega && stockActual <= stockMin;
   }).length;
-
-  
 
   const consumiblesFiltrados = consumibles.filter(
     (c) =>
@@ -81,9 +83,8 @@ export default function ConsumiblesTab() {
 
   return (
     <div className="space-y-6">
-      {/* TARJETAS DE MÉTRICAS / RESUMEN */}
+      {/* TARJETAS DE MÉTRICAS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Total Tipos de Consumibles */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipos de Consumibles</p>
@@ -94,7 +95,6 @@ export default function ConsumiblesTab() {
           </div>
         </div>
 
-        {/* Total Stock Unidades */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Unidades en Stock</p>
@@ -105,7 +105,6 @@ export default function ConsumiblesTab() {
           </div>
         </div>
 
-        {/* Alertas Stock Bajo */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Stock Bajo / Crítico</p>
@@ -116,11 +115,9 @@ export default function ConsumiblesTab() {
           </div>
         </div>
       </div>
-      
 
       {/* TABLA Y CONTROLES */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Header de la Tabla */}
         <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
           <div className="relative flex-1 max-w-xs">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -133,12 +130,24 @@ export default function ConsumiblesTab() {
             />
           </div>
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
-            >
-            <Plus className="w-4 h-4" /> Nuevo Consumible
-          </button>
+          {/* BOTONES EXCLUSIVOS DE ADMIN */}
+          {esAdmin && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
+              >
+                <Upload className="w-4 h-4 text-slate-600" /> Importar CSV
+              </button>
+
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
+              >
+                <Plus className="w-4 h-4" /> Nuevo Consumible
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tabla */}
@@ -173,7 +182,6 @@ export default function ConsumiblesTab() {
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      {/* Nombre y Descripción */}
                       <td className="px-4 sm:px-6 py-3.5">
                         <div className="font-semibold text-slate-900">{item.nombre}</div>
                         {item.descripcion && (
@@ -181,7 +189,6 @@ export default function ConsumiblesTab() {
                         )}
                       </td>
 
-                      {/* Ubicación */}
                       <td className="px-4 sm:px-6 py-3.5">
                         <div className="font-medium text-slate-800">
                           {item.bodegas?.nombre 
@@ -195,17 +202,14 @@ export default function ConsumiblesTab() {
                         </div>
                       </td>
 
-                      {/* Stock Actual */}
                       <td className="px-4 sm:px-6 py-3.5 text-center font-bold text-slate-800 text-base">
                         {item.cantidad_stock}
                       </td>
 
-                      {/* Stock Mínimo */}
                       <td className="px-4 sm:px-6 py-3.5 text-center text-slate-500 font-mono">
                         {item.stock_minimo}
                       </td>
 
-                      {/* Estado */}
                       <td className="px-4 sm:px-6 py-3.5 text-center">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
@@ -218,24 +222,26 @@ export default function ConsumiblesTab() {
                         </span>
                       </td>
 
-                      {/* Botonera de incremento/decremento rápido */}
                       <td className="px-4 sm:px-6 py-3.5 text-right">
                         <div className="inline-flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white shadow-xs">
                           <button
                             onClick={() => ajustarStock(item.id, -1, item.cantidad_stock)}
-                            disabled={item.cantidad_stock <= 0}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600 disabled:opacity-30 disabled:hover:bg-white"
-                            title="Descontar 1 unidad"
+                            disabled={!esAdmin || item.cantidad_stock <= 0}
+                            className="p-1.5 hover:bg-slate-100 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+                            title={esAdmin ? "Descontar 1 unidad" : "Solo administradores pueden modificar stock"}
                           >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
-                          <span className="px-2 text-xs font-semibold border-x border-slate-100">
+                          
+                          <span className="px-2 text-xs font-semibold border-x border-slate-100 text-slate-500">
                             1
                           </span>
+
                           <button
                             onClick={() => ajustarStock(item.id, 1, item.cantidad_stock)}
-                            className="p-1.5 hover:bg-slate-100 text-slate-600"
-                            title="Agregar 1 unidad"
+                            disabled={!esAdmin}
+                            className="p-1.5 hover:bg-slate-100 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white transition-colors"
+                            title={esAdmin ? "Agregar 1 unidad" : "Solo administradores pueden modificar stock"}
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
@@ -250,12 +256,22 @@ export default function ConsumiblesTab() {
         </div>
       </div>
 
-      {/* Modal para ingresar nuevo consumible */}
-      <NuevoConsumibleModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onConsumibleGuardado={cargarConsumibles}
-      />
+      {/* MODALES */}
+      {esAdmin && (
+        <>
+          <NuevoConsumibleModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            onConsumibleGuardado={cargarConsumibles}
+          />
+          <ImportarCSVModal
+            isOpen={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            tipo="consumibles"
+            onImportSuccess={cargarConsumibles}
+          />
+        </>
+      )}
     </div>
   );
 }
