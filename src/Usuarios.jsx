@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit2, Trash2, Search, CheckCircle, AlertCircle, Shield, Key, Eye, EyeOff, Sun, Moon } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Search, CheckCircle, AlertCircle, Shield, Key, Eye, EyeOff } from 'lucide-react';
 import { supabase } from './supabaseClient';
-import { useTheme } from './ThemeContext'; // 1. Importar el hook de tema
 
 export default function Usuarios({ usuario }) {
-  const { darkMode, toggleDarkMode } = useTheme(); // Usar estado y función de cambio
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -184,34 +182,38 @@ export default function Usuarios({ usuario }) {
       {mensaje.texto && (
         <div className={`p-4 rounded-xl border flex items-center gap-3 text-sm font-medium ${
           mensaje.tipo === 'exito' 
-            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' 
-            : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+            : 'bg-rose-50 text-rose-800 border-rose-200'
         }`}>
-          {mensaje.tipo === 'exito' ? <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" /> : <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />}
+          {mensaje.tipo === 'exito' ? (
+            <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          )}
           <span>{mensaje.texto}</span>
         </div>
       )}
 
-      {/* Controles: Búsqueda, Filtro de Rol, Toggle Tema y Botón Crear */}
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs flex flex-wrap justify-between items-center gap-3 transition-colors">
+      {/* Controles: Búsqueda, Filtro de Rol y Botón Crear */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap justify-between items-center gap-3">
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto">
           <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400 dark:text-slate-500" />
+            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar por nombre o correo..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400 dark:placeholder-slate-400 transition-colors"
+              className="w-full pl-9 pr-4 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-400"
             />
           </div>
 
           <div className="relative w-full sm:w-48">
-            <Shield className="w-4 h-4 absolute left-3 top-3 text-slate-400 dark:text-slate-500" />
+            <Shield className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <select
               value={filtroRol}
               onChange={(e) => setFiltroRol(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              className="w-full pl-9 pr-4 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Todos los Roles</option>
               <option value="admin">Administrador</option>
@@ -221,17 +223,6 @@ export default function Usuarios({ usuario }) {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          {/* Botón Switch Modo Claro/Oscuro */}
-          {/*}
-          <button
-            type="button"
-            onClick={toggleDarkMode}
-            className="p-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-            title={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          >
-            {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-          </button>*/}
-
           <button
             onClick={abrirModalCrear}
             className="bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors shadow-xs"
@@ -242,16 +233,15 @@ export default function Usuarios({ usuario }) {
       </div>
 
       {/* Tabla de Usuarios */}
-      {/*<div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs overflow-hidden transition-colors">*/}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs transition-colors">
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2">
-          <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          <h2 className="font-bold text-slate-800 dark:text-slate-100 text-base">Listado de Usuarios</h2>
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
+        <div className="pb-4 mb-4 border-b border-slate-100 flex items-center gap-2">
+          <Users className="w-5 h-5 text-blue-600" />
+          <h2 className="font-bold text-slate-800 text-base">Listado de Usuarios</h2>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-            <thead className="bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-200 font-semibold border-b border-slate-200 dark:border-slate-700">
+          <table className="w-full text-left text-xs sm:text-sm text-slate-600">
+            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
               <tr>
                 <th className="px-6 py-3">ID</th>
                 <th className="px-6 py-3">Nombre</th>
@@ -260,30 +250,30 @@ export default function Usuarios({ usuario }) {
                 <th className="px-6 py-3 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-slate-400">
                     Cargando usuarios...
                   </td>
                 </tr>
               ) : usuariosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-slate-400">
                     No hay usuarios registrados.
                   </td>
                 </tr>
               ) : (
                 usuariosFiltrados.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
-                    <td className="px-6 py-3.5 font-mono text-slate-400 dark:text-slate-500 font-medium">#{u.id}</td>
-                    <td className="px-6 py-3.5 font-bold text-slate-900 dark:text-slate-100">{u.nombre}</td>
-                    <td className="px-6 py-3.5 text-slate-600 dark:text-slate-300">{u.email}</td>
+                  <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-3.5 font-mono text-slate-400 font-medium">#{u.id}</td>
+                    <td className="px-6 py-3.5 font-bold text-slate-900">{u.nombre}</td>
+                    <td className="px-6 py-3.5 text-slate-600">{u.email}</td>
                     <td className="px-6 py-3.5">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                         u.rol === 'admin' 
-                          ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800' 
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+                          ? 'bg-purple-100 text-purple-700 border border-purple-200' 
+                          : 'bg-slate-100 text-slate-700 border border-slate-200'
                       }`}>
                         <Shield className="w-3 h-3" />
                         {u.rol === 'admin' ? 'Admin' : u.rol === 'tecnico' ? 'Técnico' : u.rol}
@@ -293,14 +283,14 @@ export default function Usuarios({ usuario }) {
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => abrirModalEditar(u)}
-                          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Editar Usuario"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => solicitarEliminacion(u.id, u.nombre)}
-                          className="p-1.5 text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                           title="Eliminar Usuario"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -318,39 +308,39 @@ export default function Usuarios({ usuario }) {
       {/* Modal Agregar / Editar */}
       {modalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6 space-y-4 transition-colors">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-600" />
               {usuarioEdit ? 'Editar Usuario' : 'Nuevo Usuario'}
             </h3>
 
             <form onSubmit={handleGuardar} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nombre Completo *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre Completo *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ej: Juan Pérez"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Correo Electrónico *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Correo Electrónico *</label>
                 <input
                   type="email"
                   required
                   placeholder="ejemplo@empresa.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
                   {usuarioEdit ? 'Contraseña (Dejar en blanco para no cambiar)' : 'Contraseña *'}
                 </label>
                 <div className="relative">
@@ -360,12 +350,12 @@ export default function Usuarios({ usuario }) {
                     placeholder={usuarioEdit ? '••••••••' : 'Ingrese contraseña'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-3 pr-10 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-3 pr-10 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -373,11 +363,11 @@ export default function Usuarios({ usuario }) {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Rol de Sistema *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Rol de Sistema *</label>
                 <select
                   value={rol}
                   onChange={(e) => setRol(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="tecnico">Técnico</option>
                   <option value="admin">Administrador</option>
@@ -388,7 +378,7 @@ export default function Usuarios({ usuario }) {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
@@ -408,15 +398,15 @@ export default function Usuarios({ usuario }) {
       {/* Modal de Confirmación de Eliminación */}
       {confirmModal.open && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 max-w-sm w-full p-6 text-center space-y-4 transition-colors">
-            <div className="w-12 h-12 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-sm w-full p-6 text-center space-y-4">
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto">
               <AlertCircle className="w-6 h-6" />
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">¿Eliminar este usuario?</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Estás a punto de eliminar a <span className="font-semibold text-slate-800 dark:text-slate-200">"{confirmModal.nombre}"</span>. Esta acción no se puede deshacer.
+              <h3 className="text-base font-bold text-slate-900">¿Eliminar este usuario?</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Estás a punto de eliminar a <span className="font-semibold text-slate-800">"{confirmModal.nombre}"</span>. Esta acción no se puede deshacer.
               </p>
             </div>
 
@@ -425,7 +415,7 @@ export default function Usuarios({ usuario }) {
                 type="button"
                 disabled={eliminando}
                 onClick={() => setConfirmModal({ open: false, id: null, nombre: '' })}
-                className="w-full py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors border border-slate-200 dark:border-slate-600 disabled:opacity-50"
+                className="w-full py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200 disabled:opacity-50"
               >
                 Cancelar
               </button>
