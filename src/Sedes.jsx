@@ -183,7 +183,7 @@ export default function Sedes({ usuario }) {
           onClick={abrirModalCrear}
           className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors shadow-xs"
         >
-          <Plus className="w-4 h-4" /> Nueva Sede Version 2
+          <Plus className="w-4 h-4" /> Nueva Sede Version 25445151
         </button>
       </div>
 
