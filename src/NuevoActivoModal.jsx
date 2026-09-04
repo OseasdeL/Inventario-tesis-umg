@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, PackagePlus, AlertCircle, Loader2, Warehouse } from 'lucide-react';
+import { X, Plus, PackagePlus, AlertCircle, Loader2, Warehouse, QrCode } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
-export default function NuevoActivoModal({ isOpen, onClose, onActivoCreado }) {
+export default function NuevoActivoModal({ 
+  isOpen, 
+  onClose, 
+  onActivoCreado, 
+  onAbrirScanner, // Prop para abrir el scanner especificando el destino ('inventario' o 'serial')
+  inventario,
+  setInventario,
+  serial,
+  setSerial
+}) {
   // Catálogos
   const [sedes, setSedes] = useState([]);
   const [bodegas, setBodegas] = useState([]);
@@ -10,8 +19,6 @@ export default function NuevoActivoModal({ isOpen, onClose, onActivoCreado }) {
   const [marcas, setMarcas] = useState([]);
 
   // Formulario
-  const [inventario, setInventario] = useState('');
-  const [serial, setSerial] = useState('');
   const [tipoActivoId, setTipoActivoId] = useState('');
   const [marcaId, setMarcaId] = useState('');
   const [especificacion, setEspecificacion] = useState('');
@@ -44,8 +51,8 @@ export default function NuevoActivoModal({ isOpen, onClose, onActivoCreado }) {
   }, [sedeId]);
 
   const resetForm = () => {
-    setInventario('');
-    setSerial('');
+    if (setInventario) setInventario('');
+    if (setSerial) setSerial('');
     setTipoActivoId('');
     setMarcaId('');
     setEspecificacion('');
@@ -84,7 +91,6 @@ export default function NuevoActivoModal({ isOpen, onClose, onActivoCreado }) {
 
       setBodegas(data || []);
 
-      // Si la sede solo tiene 1 bodega o existe una "Bodega Central", la selecciona automáticamente
       if (data && data.length > 0) {
         const bodegaCentral = data.find(b => b.nombre.toLowerCase().includes('central')) || data[0];
         setBodegaId(bodegaCentral.id.toString());
@@ -133,7 +139,7 @@ export default function NuevoActivoModal({ isOpen, onClose, onActivoCreado }) {
             estado,
             sede_id: parseInt(sedeId),
             bodega_id: parseInt(bodegaId),
-            estacion_id: null, // Siempre inicia libre de estación
+            estacion_id: null,
           }
         ])
         .select()
@@ -177,7 +183,7 @@ export default function NuevoActivoModal({ isOpen, onClose, onActivoCreado }) {
         </div>
 
         {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 text-slate-800">
           {error && (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -185,34 +191,54 @@ export default function NuevoActivoModal({ isOpen, onClose, onActivoCreado }) {
             </div>
           )}
 
-          {/* Inventario y Serial */}
+          {/* Inventario y Serial con botones QR */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 No. Inventario
               </label>
-              <input 
-                type="text" 
-                placeholder="Ej. INV-2024-08"
-                value={inventario}
-                onChange={(e) => setInventario(e.target.value)}
-                required
-                className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-              />
+              <div className="flex gap-1.5">
+                <input 
+                  type="text" 
+                  placeholder="Ej. INV-2024-08"
+                  value={inventario}
+                  onChange={(e) => setInventario(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => onAbrirScanner && onAbrirScanner('inventario')}
+                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors flex items-center justify-center shrink-0"
+                  title="Escanear QR para Inventario"
+                >
+                  <QrCode className="w-4 h-4 text-blue-600" />
+                </button>
+              </div>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                 Número de Serie
               </label>
-              <input 
-                type="text" 
-                placeholder="Ej. SN-8839201A"
-                value={serial}
-                onChange={(e) => setSerial(e.target.value)}
-                required
-                className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-              />
+              <div className="flex gap-1.5">
+                <input 
+                  type="text" 
+                  placeholder="Ej. SN-8839201A"
+                  value={serial}
+                  onChange={(e) => setSerial(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => onAbrirScanner && onAbrirScanner('serial')}
+                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition-colors flex items-center justify-center shrink-0"
+                  title="Escanear QR para Serie"
+                >
+                  <QrCode className="w-4 h-4 text-blue-600" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -263,7 +289,7 @@ export default function NuevoActivoModal({ isOpen, onClose, onActivoCreado }) {
               placeholder="Ej. Monitor 24 Pulgadas, Mini PC 3050"
               value={especificacion}
               onChange={(e) => setEspecificacion(e.target.value)}
-              className="w-full px-3.5 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 

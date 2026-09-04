@@ -24,16 +24,17 @@ export default function App() {
   });
 
   const [activos, setActivos] = useState([]);
+  const [sedes, setSedes] = useState([]);
   const [sedeFiltro, setSedeFiltro] = useState('Todas');
   const [busqueda, setBusqueda] = useState('');
 
   // --- ESTADOS PARA EDICIÓN Y ELIMINACIÓN DE ACTIVOS ---
-const [activoAEditar, setActivoAEditar] = useState(null);
-const [isEditarModalOpen, setIsEditarModalOpen] = useState(false);
+  const [activoAEditar, setActivoAEditar] = useState(null);
+  const [isEditarModalOpen, setIsEditarModalOpen] = useState(false);
 
-const [activoAEliminarId, setActivoAEliminarId] = useState(null);
-const [isEliminarModalOpen, setIsEliminarModalOpen] = useState(false);
-const [cargandoAccion, setCargandoAccion] = useState(false);
+  const [activoAEliminarId, setActivoAEliminarId] = useState(null);
+  const [isEliminarModalOpen, setIsEliminarModalOpen] = useState(false);
+  const [cargandoAccion, setCargandoAccion] = useState(false);
   
   // Estados para Modales
   const [isNuevoModalOpen, setIsNuevoModalOpen] = useState(false);
@@ -41,6 +42,11 @@ const [cargandoAccion, setCargandoAccion] = useState(false);
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false);
   const [showExpiradoModal, setShowExpiradoModal] = useState(false);
   const [isImportActivosOpen, setIsImportActivosOpen] = useState(false);
+
+  const [destinoScanner, setDestinoScanner] = useState('busqueda');
+  const [inventarioModal, setInventarioModal] = useState('');
+  const [serialModal, setSerialModal] = useState('');
+
 
   // Vista activa: 'inventario' | 'consumibles' | 'solicitudes' | 'estaciones' | 'sedes' | 'bodegas' | 'usuarios'
   const [vistaActiva, setVistaActiva] = useState('inventario'); 
@@ -65,100 +71,91 @@ const [cargandoAccion, setCargandoAccion] = useState(false);
   };
 
   // --- HANDLERS DE EDICIÓN ---
-const abrirModalEditar = (activo) => {
-  setActivoAEditar({
-    id: activo.id,
-    qr: activo.qr || '',
-    inventario: activo.inventario || '',
-    serial: activo.serial || '',
-    tipo_activo_id: activo.tipo_activo_id || '',
-    marca_id: activo.marca_id || '',
-    especificacion: activo.especificacion || '',
-    propiedad: activo.propiedad || 'Propio',
-    estado: activo.estado || 'Disponible',
-    sede_id: activo.sede_id || '',
-    bodega_id: activo.bodega_id || '',
-    estacion_id: activo.estacion_id || ''
-  });
-  setIsEditarModalOpen(true);
-};
+  const abrirModalEditar = (activo) => {
+    setActivoAEditar({
+      id: activo.id,
+      qr: activo.qr || '',
+      inventario: activo.inventario || '',
+      serial: activo.serial || '',
+      tipo_activo_id: activo.tipo_activo_id || '',
+      marca_id: activo.marca_id || '',
+      especificacion: activo.especificacion || '',
+      propiedad: activo.propiedad || 'Propio',
+      estado: activo.estado || 'Disponible',
+      sede_id: activo.sede_id || '',
+      bodega_id: activo.bodega_id || '',
+      estacion_id: activo.estacion_id || ''
+    });
+    setIsEditarModalOpen(true);
+  };
 
-const handleGuardarEdicion = async (e) => {
-  e.preventDefault();
-  setCargandoAccion(true);
+  const handleGuardarEdicion = async (e) => {
+    e.preventDefault();
+    setCargandoAccion(true);
 
-  try {
-    const payload = {
-      qr: activoAEditar.qr,
-      inventario: activoAEditar.inventario,
-      serial: activoAEditar.serial,
-      especificacion: activoAEditar.especificacion,
-      propiedad: activoAEditar.propiedad,
-      estado: activoAEditar.estado,
-    };
+    try {
+      const payload = {
+        qr: activoAEditar.qr,
+        inventario: activoAEditar.inventario,
+        serial: activoAEditar.serial,
+        especificacion: activoAEditar.especificacion,
+        propiedad: activoAEditar.propiedad,
+        estado: activoAEditar.estado,
+      };
 
-    if (activoAEditar.tipo_activo_id) payload.tipo_activo_id = Number(activoAEditar.tipo_activo_id);
-    if (activoAEditar.marca_id) payload.marca_id = Number(activoAEditar.marca_id);
-    if (activoAEditar.sede_id) payload.sede_id = Number(activoAEditar.sede_id);
-    if (activoAEditar.bodega_id) payload.bodega_id = Number(activoAEditar.bodega_id);
-    if (activoAEditar.estacion_id) payload.estacion_id = Number(activoAEditar.estacion_id);
+      if (activoAEditar.tipo_activo_id) payload.tipo_activo_id = Number(activoAEditar.tipo_activo_id);
+      if (activoAEditar.marca_id) payload.marca_id = Number(activoAEditar.marca_id);
+      if (activoAEditar.sede_id) payload.sede_id = Number(activoAEditar.sede_id);
+      if (activoAEditar.bodega_id) payload.bodega_id = Number(activoAEditar.bodega_id);
+      if (activoAEditar.estacion_id) payload.estacion_id = Number(activoAEditar.estacion_id);
 
-    const { error } = await supabase
-      .from('activos')
-      .update(payload)
-      .eq('id', activoAEditar.id);
+      const { error } = await supabase
+        .from('activos')
+        .update(payload)
+        .eq('id', activoAEditar.id);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    // Recargar la lista de activos llamando a la función existente en tu código
-    if (typeof fetchActivos === 'function') {
-      await fetchActivos();
-    } else if (typeof cargarActivos === 'function') {
       await cargarActivos();
+
+      setIsEditarModalOpen(false);
+      setActivoAEditar(null);
+    } catch (err) {
+      alert('Error al actualizar el activo: ' + err.message);
     }
+    finally {
+      setCargandoAccion(false);
+    }
+  };
 
-    setIsEditarModalOpen(false);
-    setActivoAEditar(null);
-  } catch (err) {
-    alert('Error al actualizar el activo: ' + err.message);
-  } finally {
-    setCargandoAccion(false);
-  }
-};
+  // --- HANDLERS DE ELIMINACIÓN ---
+  const solicitarEliminacion = (id) => {
+    setActivoAEliminarId(id);
+    setIsEliminarModalOpen(true);
+  };
 
-// --- HANDLERS DE ELIMINACIÓN ---
-const solicitarEliminacion = (id) => {
-  setActivoAEliminarId(id);
-  setIsEliminarModalOpen(true);
-};
+  const handleConfirmarEliminacion = async () => {
+    if (!activoAEliminarId) return;
+    setCargandoAccion(true);
 
-const handleConfirmarEliminacion = async () => {
-  if (!activoAEliminarId) return;
-  setCargandoAccion(true);
+    try {
+      const { error } = await supabase
+        .from('activos')
+        .delete()
+        .eq('id', activoAEliminarId);
 
-  try {
-    const { error } = await supabase
-      .from('activos')
-      .delete()
-      .eq('id', activoAEliminarId);
+      if (error) throw error;
 
-    if (error) throw error;
-
-    // Recargar la lista de activos
-    if (typeof fetchActivos === 'function') {
-      await fetchActivos();
-    } else if (typeof cargarActivos === 'function') {
       await cargarActivos();
-    }
 
-    setIsEliminarModalOpen(false);
-    setActivoAEliminarId(null);
-  } catch (err) {
-    alert('Error al eliminar el activo: ' + err.message);
-  } finally {
-    setCargandoAccion(false);
-  }
-};
+      setIsEliminarModalOpen(false);
+      setActivoAEliminarId(null);
+    } catch (err) {
+      alert('Error al eliminar el activo: ' + err.message);
+    } finally {
+      setCargandoAccion(false);
+    }
+  };
 
   // Temporizador de inactividad
   useEffect(() => {
@@ -183,13 +180,25 @@ const handleConfirmarEliminacion = async () => {
     };
   }, [usuario]);
 
-  // Cargar activos y movimientos al iniciar la app
+  // Cargar activos, sedes y movimientos al iniciar la app
   useEffect(() => {
     if (usuario) {
       cargarActivos();
+      cargarSedes();
       obtenerMovimientos();
     }
   }, [usuario]);
+
+  const cargarSedes = async () => {
+    const { data, error } = await supabase
+      .from('sedes')
+      .select('id, nombre')
+      .order('nombre');
+
+    if (!error && data) {
+      setSedes(data);
+    }
+  };
 
   const cargarActivos = async () => {
     const { data, error } = await supabase
@@ -202,6 +211,7 @@ const handleConfirmarEliminacion = async () => {
         especificacion,
         propiedad,
         estado,
+        sede_id,
         sedes ( id, nombre ),
         bodegas ( id, nombre ),
         estaciones ( id, nombre ),
@@ -257,17 +267,38 @@ const handleConfirmarEliminacion = async () => {
     setActivos([nuevoActivo, ...activos]);
   };
 
-  const handleScanSuccess = (decodedText) => {
-    setBusqueda(decodedText);
-    setIsScannerOpen(false);
-  };
+
+ const handleAbrirScanner = (destino) => {
+  setDestinoScanner(destino);
+  setIsScannerOpen(true);
+};
+
+
+const handleScanSuccess = (decodedText) => {
+  if (destinoScanner === 'inventario') {
+    setInventarioModal(decodedText);
+  } else if (destinoScanner === 'serial') {
+    setSerialModal(decodedText);
+  } else {
+    setBusqueda(decodedText); // Búsqueda general del inventario
+  }
+  setIsScannerOpen(false);
+};
 
   const activosFiltrados = activos.filter(activo => {
-    const coincideSede = sedeFiltro === 'Todas' || activo.sedes?.nombre === sedeFiltro;
+    const coincideSede = sedeFiltro === 'Todas' || 
+      activo.sedes?.nombre === sedeFiltro || 
+      String(activo.sede_id) === String(sedeFiltro);
+
     const terminoBusqueda = busqueda.toLowerCase();
-    const coincideBusqueda = (activo.inventario || '').toLowerCase().includes(terminoBusqueda) || 
-                             (activo.serial || '').toLowerCase().includes(terminoBusqueda) ||
-                             (activo.qr || '').toLowerCase().includes(terminoBusqueda);
+    const coincideBusqueda = 
+      (activo.inventario || '').toLowerCase().includes(terminoBusqueda) || 
+      (activo.serial || '').toLowerCase().includes(terminoBusqueda) ||
+      (activo.qr || '').toLowerCase().includes(terminoBusqueda) ||
+      (activo.tipos_activo?.nombre || '').toLowerCase().includes(terminoBusqueda) ||
+      (activo.marcas?.nombre || '').toLowerCase().includes(terminoBusqueda) ||
+      (activo.especificacion || '').toLowerCase().includes(terminoBusqueda);
+
     return coincideSede && coincideBusqueda;
   });
 
@@ -409,175 +440,201 @@ const handleConfirmarEliminacion = async () => {
         
       <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
 
-       {/* PESTAÑA 1: INVENTARIO DE ACTIVOS */}
-{vistaActiva === 'inventario' && (
-  <>
-    {/* Búsqueda */}
-    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex justify-between items-center transition-colors">
-      <div className="relative w-full sm:w-80">
-        <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-        <input 
-          type="text" 
-          placeholder="Buscar por Inventario o Serie..." 
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-        />
-      </div>
-    </div>
+        {/* PESTAÑA 1: INVENTARIO DE ACTIVOS */}
+        {vistaActiva === 'inventario' && (
+          <>
+            {/* Búsqueda, Filtro de Sede y Botón QR */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap gap-3 justify-between items-center transition-colors">
+              <div className="flex flex-wrap items-center gap-2 flex-1 max-w-xl">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar por inventario, serie, QR, marca..." 
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    className="w-full pl-9 pr-10 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                  />
+                  {/* BOTÓN INTEGRADOR DEL ESCÁNER QR */}
+                  <button
+                    onClick={() => setIsScannerOpen(true)}
+                    className="absolute right-2 top-2 p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-md transition-colors"
+                    title="Escanear QR"
+                  >
+                    <QrCode className="w-4 h-4" />
+                  </button>
+                </div>
 
-    {/* Tabla de Activos Fijos */}
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden transition-colors">
-      <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
-        <h2 className="font-bold text-slate-800 text-base">Inventario de Activos Fijos</h2>
-        
-        {/* RESTRICCIÓN DE ROL: Solo administradores pueden agregar nuevos activos */}
-        {usuario?.rol === 'admin' && (
+                {/* SELECTOR DE SEDE */}
+                <div className="relative">
+                  <select
+                    value={sedeFiltro}
+                    onChange={(e) => setSedeFiltro(e.target.value)}
+                    className="pl-8 pr-4 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-700 font-medium cursor-pointer"
+                  >
+                    <option value="Todas">Todas las Sedes</option>
+                    {sedes.map((sede) => (
+                      <option key={sede.id} value={sede.nombre}>
+                        {sede.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <Building2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-2">
-          <button
-              onClick={() => setIsImportActivosOpen(true)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
-            >
-              <Upload className="w-4 h-4 text-slate-600" /> Importar CSV
-            </button>  
+            {/* Tabla de Activos Fijos */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden transition-colors">
+              <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+                <h2 className="font-bold text-slate-800 text-base">Inventario de Activos Fijos</h2>
+                
+                {/* RESTRICCIÓN DE ROL: Solo administradores pueden agregar nuevos activos */}
+                {usuario?.rol === 'admin' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsImportActivosOpen(true)}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
+                    >
+                      <Upload className="w-4 h-4 text-slate-600" /> Importar CSV
+                    </button>  
 
-          <button 
-            onClick={() => setIsNuevoModalOpen(true)}
-            className="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
-          >
-            <Plus className="w-4 h-4" /> Nuevo Activo
-          </button>
-          </div>
-        )}
-      </div>
+                    <button 
+                      onClick={() => setIsNuevoModalOpen(true)}
+                      className="flex-1 sm:flex-none justify-center bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm px-3.5 py-2 rounded-lg flex items-center gap-1.5 transition-colors shadow-xs font-medium"
+                    >
+                      <Plus className="w-4 h-4" /> Nuevo Activo
+                    </button>
+                  </div>
+                )}
+              </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs sm:text-sm text-slate-600">
-          <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
-            <tr>
-              <th className="px-4 sm:px-6 py-3">Código QR</th>
-              <th className="px-4 sm:px-6 py-3">No. Inventario / Serie</th>
-              <th className="px-4 sm:px-6 py-3">Equipo</th>
-              <th className="px-4 sm:px-6 py-3">Ubicación Actual</th>
-              <th className="px-4 sm:px-6 py-3">Propiedad</th>
-              <th className="px-4 sm:px-6 py-3">Estado</th>
-              {usuario?.rol === 'admin' && (
-                <th className="px-4 sm:px-6 py-3 text-right">Acciones</th>
-              )}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {activosFiltrados.length === 0 ? (
-              <tr>
-                <td colSpan={usuario?.rol === 'admin' ? 7 : 6} className="px-6 py-8 text-center text-slate-400">
-                  No se encontraron activos registrados.
-                </td>
-              </tr>
-            ) : (
-              activosFiltrados.map((activo) => {
-                const ubicacionNombre = activo.bodegas?.nombre 
-                  ? `Bodega: ${activo.bodegas.nombre}`
-                  : activo.estaciones?.nombre 
-                  ? `Estación: ${activo.estaciones.nombre}`
-                  : 'Sin Ubicación';
-
-                const esBodega = Boolean(activo.bodegas?.nombre);
-
-                return (
-                  <tr key={activo.id} className="hover:bg-slate-50 transition-colors">
-                    {/* QR */}
-                    <td className="px-4 sm:px-6 py-3.5 font-mono text-[11px] font-semibold text-blue-600">
-                      <span className="bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                        {activo.qr}
-                      </span>
-                    </td>
-
-                    {/* Inventario y Serial */}
-                    <td className="px-4 sm:px-6 py-3.5">
-                      <div className="font-semibold text-slate-900 font-mono">{activo.inventario}</div>
-                      <div className="text-[11px] font-mono text-slate-400">SN: {activo.serial}</div>
-                    </td>
-
-                    {/* Tipo, Marca y Especificación */}
-                    <td className="px-4 sm:px-6 py-3.5">
-                      <div className="font-medium text-slate-800">
-                        {activo.tipos_activo?.nombre || 'General'} - {activo.marcas?.nombre || 'N/A'}
-                      </div>
-                      {activo.especificacion && (
-                        <div className="text-[11px] text-slate-500 truncate max-w-[200px]">
-                          {activo.especificacion}
-                        </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm text-slate-600">
+                  <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 sm:px-6 py-3">Código QR</th>
+                      <th className="px-4 sm:px-6 py-3">No. Inventario / Serie</th>
+                      <th className="px-4 sm:px-6 py-3">Equipo</th>
+                      <th className="px-4 sm:px-6 py-3">Ubicación Actual</th>
+                      <th className="px-4 sm:px-6 py-3">Propiedad</th>
+                      <th className="px-4 sm:px-6 py-3">Estado</th>
+                      {usuario?.rol === 'admin' && (
+                        <th className="px-4 sm:px-6 py-3 text-right">Acciones</th>
                       )}
-                    </td>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {activosFiltrados.length === 0 ? (
+                      <tr>
+                        <td colSpan={usuario?.rol === 'admin' ? 7 : 6} className="px-6 py-8 text-center text-slate-400">
+                          No se encontraron activos registrados.
+                        </td>
+                      </tr>
+                    ) : (
+                      activosFiltrados.map((activo) => {
+                        const ubicacionNombre = activo.bodegas?.nombre 
+                          ? `Bodega: ${activo.bodegas.nombre}`
+                          : activo.estaciones?.nombre 
+                          ? `Estación: ${activo.estaciones.nombre}`
+                          : 'Sin Ubicación';
 
-                    {/* Ubicación (Bodega o Estación + Sede) */}
-                    <td className="px-4 sm:px-6 py-3.5">
-                      <div className={`font-medium ${esBodega ? 'text-blue-700' : 'text-purple-700'}`}>
-                        {ubicacionNombre}
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        {activo.sedes?.nombre || 'Sede N/A'}
-                      </div>
-                    </td>
+                        const esBodega = Boolean(activo.bodegas?.nombre);
 
-                    {/* Propiedad */}
-                    <td className="px-4 sm:px-6 py-3.5">
-                      <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
-                        activo.propiedad === 'Leasing'
-                          ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : 'bg-slate-100 text-slate-700 border-slate-200'
-                      }`}>
-                        {activo.propiedad || 'Propio'}
-                      </span>
-                    </td>
+                        return (
+                          <tr key={activo.id} className="hover:bg-slate-50 transition-colors">
+                            {/* QR */}
+                            <td className="px-4 sm:px-6 py-3.5 font-mono text-[11px] font-semibold text-blue-600">
+                              <span className="bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                {activo.qr}
+                              </span>
+                            </td>
 
-                    {/* Estado Operativo */}
-                    <td className="px-4 sm:px-6 py-3.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                        activo.estado === 'Disponible'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : activo.estado === 'Asignado'
-                          ? 'bg-blue-100 text-blue-700'
-                          : activo.estado === 'En diagnostico'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-rose-100 text-rose-700'
-                      }`}>
-                        {activo.estado}
-                      </span>
-                    </td>
+                            {/* Inventario y Serial */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <div className="font-semibold text-slate-900 font-mono">{activo.inventario}</div>
+                              <div className="text-[11px] font-mono text-slate-400">SN: {activo.serial}</div>
+                            </td>
 
-                    {/* RESTRICCIÓN DE ROL: Acciones solo para Admin */}
-                    {usuario?.rol === 'admin' && (
-                      <td className="px-4 sm:px-6 py-3.5 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => abrirModalEditar(activo)}
-                            className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Editar Activo"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => solicitarEliminacion(activo.id)}
-                            className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Eliminar Activo"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
+                            {/* Tipo, Marca y Especificación */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <div className="font-medium text-slate-800">
+                                {activo.tipos_activo?.nombre || 'General'} - {activo.marcas?.nombre || 'N/A'}
+                              </div>
+                              {activo.especificacion && (
+                                <div className="text-[11px] text-slate-500 truncate max-w-[200px]">
+                                  {activo.especificacion}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Ubicación (Bodega o Estación + Sede) */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <div className={`font-medium ${esBodega ? 'text-blue-700' : 'text-purple-700'}`}>
+                                {ubicacionNombre}
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                {activo.sedes?.nombre || 'Sede N/A'}
+                              </div>
+                            </td>
+
+                            {/* Propiedad */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                                activo.propiedad === 'Leasing'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}>
+                                {activo.propiedad || 'Propio'}
+                              </span>
+                            </td>
+
+                            {/* Estado Operativo */}
+                            <td className="px-4 sm:px-6 py-3.5">
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                                activo.estado === 'Disponible'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : activo.estado === 'Asignado'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : activo.estado === 'En diagnostico'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}>
+                                {activo.estado}
+                              </span>
+                            </td>
+
+                            {/* RESTRICCIÓN DE ROL: Acciones solo para Admin */}
+                            {usuario?.rol === 'admin' && (
+                              <td className="px-4 sm:px-6 py-3.5 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => abrirModalEditar(activo)}
+                                    className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Editar Activo"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => solicitarEliminacion(activo.id)}
+                                    className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    title="Eliminar Activo"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })
                     )}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </>
-)}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* PESTAÑA 2: CONSUMIBLES */}
         {vistaActiva === 'consumibles' && (
@@ -641,8 +698,13 @@ const handleConfirmarEliminacion = async () => {
       {/* Modales */}
       <NuevoActivoModal 
         isOpen={isNuevoModalOpen} 
-        onClose={() => setIsNuevoModalOpen(false)} 
-        onAgregar={handleAgregarActivo} 
+          onClose={() => setIsNuevoModalOpen(false)} 
+          onActivoCreado={handleAgregarActivo} 
+          onAbrirScanner={handleAbrirScanner}
+          inventario={inventarioModal}
+          setInventario={setInventarioModal}
+          serial={serialModal}
+          setSerial={setSerialModal}
       />
 
       <ScannerQRModal 
@@ -664,142 +726,122 @@ const handleConfirmarEliminacion = async () => {
       />
 
       <ImportarCSVModal
-          isOpen={isImportActivosOpen}
-          onClose={() => setIsImportActivosOpen(false)}
-          tipo="activos"
-          onImportSuccess={cargarActivos}
-        />
+        isOpen={isImportActivosOpen}
+        onClose={() => setIsImportActivosOpen(false)}
+        tipo="activos"
+        onImportSuccess={cargarActivos}
+      />
 
       {/* MODAL DE EDICIÓN DE ACTIVO */}
-{isEditarModalOpen && activoAEditar && (
-  <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-    <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100 dark:border-slate-700 max-h-[90vh] overflow-y-auto text-slate-800 dark:text-slate-100">
-      <h3 className="text-lg font-bold mb-4">Editar Activo Fijo</h3>
-      
-      <form onSubmit={handleGuardarEdicion} className="space-y-4 text-xs sm:text-sm">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Código QR</label>
-            <input
-              type="text"
-              required
-              value={activoAEditar.qr}
-              onChange={(e) => setActivoAEditar({...activoAEditar, qr: e.target.value})}
-              className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 font-mono"
-            />
+      {isEditarModalOpen && activoAEditar && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100 dark:border-slate-700 max-h-[90vh] overflow-y-auto text-slate-800 dark:text-slate-100">
+            <h3 className="text-lg font-bold mb-4">Editar Activo Fijo</h3>
+            
+            <form onSubmit={handleGuardarEdicion} className="space-y-4 text-xs sm:text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Código QR</label>
+                  <input
+                    type="text"
+                    required
+                    value={activoAEditar.qr}
+                    onChange={(e) => setActivoAEditar({...activoAEditar, qr: e.target.value})}
+                    className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">No. Inventario</label>
+                  <input
+                    type="text"
+                    required
+                    value={activoAEditar.inventario}
+                    onChange={(e) => setActivoAEditar({...activoAEditar, inventario: e.target.value})}
+                    className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Número de Serie</label>
+                  <input
+                    type="text"
+                    value={activoAEditar.serial}
+                    onChange={(e) => setActivoAEditar({...activoAEditar, serial: e.target.value})}
+                    className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Propiedad</label>
+                  <select
+                    value={activoAEditar.propiedad}
+                    onChange={(e) => setActivoAEditar({...activoAEditar, propiedad: e.target.value})}
+                    className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Propio">Propio</option>
+                    <option value="Leasing">Leasing</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Especificación</label>
+                <input
+                  type="text"
+                  value={activoAEditar.especificacion}
+                  onChange={(e) => setActivoAEditar({...activoAEditar, especificacion: e.target.value})}
+                  className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsEditarModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100 font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={cargandoAccion}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50"
+                >
+                  {cargandoAccion ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
           </div>
-          <div>
-            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">No. Inventario</label>
-            <input
-              type="text"
-              required
-              value={activoAEditar.inventario}
-              onChange={(e) => setActivoAEditar({...activoAEditar, inventario: e.target.value})}
-              className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 font-mono"
-            />
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      {isEliminarModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4">
+            <h3 className="text-lg font-bold text-slate-800">Confirmar Eliminación</h3>
+            <p className="text-sm text-slate-600">¿Estás seguro de que deseas eliminar este activo? Esta acción no se puede deshacer.</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsEliminarModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100 font-medium text-xs sm:text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarEliminacion}
+                disabled={cargandoAccion}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-medium text-xs sm:text-sm disabled:opacity-50"
+              >
+                {cargandoAccion ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
           </div>
         </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Número de Serie</label>
-            <input
-              type="text"
-              value={activoAEditar.serial}
-              onChange={(e) => setActivoAEditar({...activoAEditar, serial: e.target.value})}
-              className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 font-mono"
-            />
-          </div>
-          <div>
-            <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Propiedad</label>
-            <select
-              value={activoAEditar.propiedad}
-              onChange={(e) => setActivoAEditar({...activoAEditar, propiedad: e.target.value})}
-              className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="Propio">Propio</option>
-              <option value="Leasing">Leasing</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Estado Operativo</label>
-          <select
-            value={activoAEditar.estado}
-            onChange={(e) => setActivoAEditar({...activoAEditar, estado: e.target.value})}
-            className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="Disponible">Disponible</option>
-            <option value="Asignado">Asignado</option>
-            <option value="En diagnostico">En diagnóstico</option>
-            <option value="Baja">Baja</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-slate-600 dark:text-slate-300 font-semibold mb-1">Especificaciones / Detalles</label>
-          <textarea
-            rows="3"
-            value={activoAEditar.especificacion}
-            onChange={(e) => setActivoAEditar({...activoAEditar, especificacion: e.target.value})}
-            className="w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500"
-          ></textarea>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
-          <button
-            type="button"
-            onClick={() => setIsEditarModalOpen(false)}
-            className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 font-medium"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={cargandoAccion}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50"
-          >
-            {cargandoAccion ? 'Guardando...' : 'Guardar Cambios'}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
-
-{/* MODAL CONFIRMAR ELIMINACIÓN */}
-{isEliminarModalOpen && (
-  <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-    <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-100 dark:border-slate-700 text-center text-slate-800 dark:text-slate-100">
-      <div className="w-12 h-12 bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto mb-3">
-        <Trash2 className="w-6 h-6" />
-      </div>
-      <h3 className="text-base font-bold mb-1">¿Eliminar este activo?</h3>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mb-6">
-        Esta acción es permanente y no se podrá deshacer.
-      </p>
-
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setIsEliminarModalOpen(false)}
-          className="flex-1 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs sm:text-sm font-medium"
-        >
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={handleConfirmarEliminacion}
-          disabled={cargandoAccion}
-          className="flex-1 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 text-xs sm:text-sm font-semibold disabled:opacity-50"
-        >
-          {cargandoAccion ? 'Eliminando...' : 'Sí, eliminar'}
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
     </div>
   );
 }

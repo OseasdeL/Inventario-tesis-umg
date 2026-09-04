@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Package, AlertTriangle, Boxes, Search, Upload } from 'lucide-react';
+import { Plus, Minus, Package, AlertTriangle, Boxes, Search, Upload, Building2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import NuevoConsumibleModal from './NuevoConsumibleModal';
 import ImportarCSVModal from './ImportarCSVModal'; 
 
 export default function ConsumiblesTab({ usuario }) {
   const [consumibles, setConsumibles] = useState([]);
+  const [sedes, setSedes] = useState([]); // <--- ESTADO DE SEDES
+  const [sedeSeleccionada, setSedeSeleccionada] = useState(''); // <--- FILTRO DE SEDE SELECCIONADA
   const [busqueda, setBusqueda] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false); // <--- ESTADO DEL MODAL CSV
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const rolNormalizado = (usuario?.rol || usuario?.role || usuario?.tipo_usuario || '').toString().toLowerCase();
@@ -16,7 +18,21 @@ export default function ConsumiblesTab({ usuario }) {
 
   useEffect(() => {
     cargarConsumibles();
+    cargarSedes();
   }, []);
+
+  const cargarSedes = async () => {
+    const { data, error } = await supabase
+      .from('sedes')
+      .select('id, nombre')
+      .order('nombre');
+
+    if (error) {
+      console.error('Error al cargar sedes:', error);
+    } else {
+      setSedes(data || []);
+    }
+  };
 
   const cargarConsumibles = async () => {
     setLoading(true);
@@ -28,9 +44,12 @@ export default function ConsumiblesTab({ usuario }) {
         descripcion,
         cantidad_stock,
         stock_minimo,
+        sede_id,
+        bodega_id,
+        estacion_id,
         sedes ( id, nombre ),
         bodegas ( id, nombre ),
-        estaciones (id,nombre)
+        estaciones ( id, nombre )
       `)
       .or('bodega_id.not.is.null,cantidad_stock.gt.0')
       .order('nombre');
@@ -64,22 +83,31 @@ export default function ConsumiblesTab({ usuario }) {
     }
   };
 
-  const totalTiposConsumibles = consumibles.length;
-  const totalUnidadesStock = consumibles.reduce((acc, c) => acc + (c.cantidad_stock || 0), 0);
-  
-  const consumiblesConStockBajo = consumibles.filter(c => {
+  // FILTRADO PRINCIPAL POR TEXTO Y SEDE
+  const consumiblesFiltrados = consumibles.filter((c) => {
+    const coincideTexto =
+      c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      (c.descripcion && c.descripcion.toLowerCase().includes(busqueda.toLowerCase()));
+
+    const coincideSede =
+      sedeSeleccionada === '' ||
+      String(c.sede_id) === String(sedeSeleccionada) ||
+      String(c.sedes?.id) === String(sedeSeleccionada);
+
+    return coincideTexto && coincideSede;
+  });
+
+  // MÉTRICAS DINÁMICAS (Responden al filtro de Sede)
+  const totalTiposConsumibles = consumiblesFiltrados.length;
+  const totalUnidadesStock = consumiblesFiltrados.reduce((acc, c) => acc + (c.cantidad_stock || 0), 0);
+
+  const consumiblesConStockBajo = consumiblesFiltrados.filter((c) => {
     const esBodega = Boolean(c.bodega_id || c.bodegas?.nombre);
     const stockActual = Number(c.cantidad_stock) || 0;
     const stockMin = Number(c.stock_minimo) || 0;
 
     return esBodega && stockActual <= stockMin;
   }).length;
-
-  const consumiblesFiltrados = consumibles.filter(
-    (c) =>
-      c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-      (c.descripcion && c.descripcion.toLowerCase().includes(busqueda.toLowerCase()))
-  );
 
   return (
     <div className="space-y-6">
@@ -119,15 +147,36 @@ export default function ConsumiblesTab({ usuario }) {
       {/* TABLA Y CONTROLES */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar consumible..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
-            />
+          
+          {/* BARRA DE BÚSQUEDA Y FILTRO DE SEDE */}
+          <div className="flex flex-wrap items-center gap-2 flex-1 max-w-xl">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar consumible..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 bg-white"
+              />
+            </div>
+
+            {/* SELECTOR DE SEDE */}
+            <div className="relative">
+              <select
+                value={sedeSeleccionada}
+                onChange={(e) => setSedeSeleccionada(e.target.value)}
+                className="pl-8 pr-4 py-1.5 text-xs sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 bg-white text-slate-700 font-medium cursor-pointer"
+              >
+                <option value="">Todas las Sedes</option>
+                {sedes.map((sede) => (
+                  <option key={sede.id} value={sede.id}>
+                    {sede.nombre}
+                  </option>
+                ))}
+              </select>
+              <Building2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
           </div>
 
           {/* BOTONES EXCLUSIVOS DE ADMIN */}
