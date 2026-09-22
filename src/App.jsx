@@ -309,7 +309,7 @@ const handleScanSuccess = (decodedText) => {
       <header className="bg-slate-900 text-white px-4 sm:px-6 py-3.5 flex flex-wrap justify-between items-center gap-3 shadow-md">
         <div className="flex items-center gap-2.5">
           <Warehouse className="text-blue-400 w-6 h-6" />
-          <h1 className="text-lg font-bold tracking-wide">Control de Bodegas</h1>
+          <h1 className="text-lg font-bold tracking-wide">Control de Inventarios</h1>
         </div>
         
         <div className="flex items-center gap-3">
