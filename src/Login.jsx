@@ -47,18 +47,19 @@ export default function Login({ onLogin }) {
       // Mensaje de éxito
       setExito('¡Inicio de sesión exitoso! Redirigiendo...');
 
-      // Login exitoso pasando el usuario y su rol real
-      onLogin({
-        id: data.id,
-        nombre: data.nombre,
-        email: data.email,
-        rol: data.rol || 'tecnico'
-      });
+      // Pausa de 1.5 segundos para mostrar el mensaje antes de redirigir
+      setTimeout(() => {
+        onLogin({
+          id: data.id,
+          nombre: data.nombre,
+          email: data.email,
+          rol: data.rol || 'tecnico'
+        });
+      }, 1500);
 
     } catch (err) {
       console.error('Error al autenticar:', err);
       setError('Error inesperado al conectar.');
-    } finally {
       setCargando(false);
     }
   };
@@ -107,7 +108,7 @@ export default function Login({ onLogin }) {
                 placeholder="usuario@bodega.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={cargando}
+                disabled={cargando || !!exito}
                 className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
               />
             </div>
@@ -125,7 +126,7 @@ export default function Login({ onLogin }) {
                 placeholder="••••••••"
                 value={clave}
                 onChange={(e) => setClave(e.target.value)}
-                disabled={cargando}
+                disabled={cargando || !!exito}
                 className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
               />
             </div>
@@ -133,7 +134,7 @@ export default function Login({ onLogin }) {
 
           <button
             type="submit"
-            disabled={cargando}
+            disabled={cargando || !!exito}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {cargando ? (
