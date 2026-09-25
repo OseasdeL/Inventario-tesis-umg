@@ -72,7 +72,7 @@ export default function Login({ onLogin }) {
           <div className="bg-blue-50 w-12 h-12 rounded-xl flex items-center justify-center mx-auto text-blue-600">
             <Warehouse className="w-6 h-6" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900">Control de Bodega</h1>
+          <h1 className="text-xl font-bold text-slate-900">Control de Inventarios</h1>
           <p className="text-xs text-slate-500">Ingresa tu correo y contraseña para acceder</p>
         </div>
 
