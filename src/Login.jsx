@@ -1,7 +1,3 @@
-Aquí tienes el código con el mensaje de éxito agregado. Se agregaron tres detalles respetando el resto del código:
- * Importación del icono CheckCircle2 de lucide-react.
- * Estado exito para almacenar el mensaje.
- * Renderizado de la alerta verde cuando exito contiene texto.
 import React, { useState } from 'react';
 import { Warehouse, Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
