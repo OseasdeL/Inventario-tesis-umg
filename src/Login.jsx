@@ -1,16 +1,22 @@
+Aquí tienes el código con el mensaje de éxito agregado. Se agregaron tres detalles respetando el resto del código:
+ * Importación del icono CheckCircle2 de lucide-react.
+ * Estado exito para almacenar el mensaje.
+ * Renderizado de la alerta verde cuando exito contiene texto.
 import React, { useState } from 'react';
-import { Warehouse, Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
+import { Warehouse, Lock, Mail, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('');
   const [clave, setClave] = useState('');
   const [error, setError] = useState('');
+  const [exito, setExito] = useState('');
   const [cargando, setCargando] = useState(false);
 
   const handleIngresar = async (e) => {
     e.preventDefault();
     setError('');
+    setExito('');
 
     const emailLimpio = email.trim().toLowerCase();
     const claveLimpia = clave.trim();
@@ -41,6 +47,9 @@ export default function Login({ onLogin }) {
         setCargando(false);
         return;
       }
+
+      // Mensaje de éxito
+      setExito('¡Inicio de sesión exitoso! Redirigiendo...');
 
       // Login exitoso pasando el usuario y su rol real
       onLogin({
@@ -76,6 +85,14 @@ export default function Login({ onLogin }) {
           <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-lg text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {/* Mensaje de Éxito */}
+        {exito && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 rounded-lg text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{exito}</span>
           </div>
         )}
 
