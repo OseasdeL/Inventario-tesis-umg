@@ -17,6 +17,9 @@ export default function Estaciones({ userRole = 'admin' }) {
   const [filtroSede, setFiltroSede] = useState('todas');
   const [busqueda, setBusqueda] = useState('');
 
+  // Estado para el Modal de Confirmación de Eliminación
+  const [estacionAEliminar, setEstacionAEliminar] = useState(null);
+
   // Estados de Paginación
   const [limiteRegistros, setLimiteRegistros] = useState('25'); // '25', '50', '75', '100', 'todos'
   const [paginaActual, setPaginaActual] = useState(1);
@@ -148,9 +151,11 @@ export default function Estaciones({ userRole = 'admin' }) {
     setMostrarFormulario(false);
   };
 
-  const handleEliminar = async (id, nombreEst) => {
-    if (!confirm(`¿Estás seguro de que deseas eliminar la estación "${nombreEst}"?`)) return;
+  // Función ejecutada cuando se confirma la eliminación desde el modal
+  const confirmarEliminacion = async () => {
+    if (!estacionAEliminar) return;
 
+    const { id, nombre: nombreEst } = estacionAEliminar;
     const { error } = await supabase.from('estaciones').delete().eq('id', id);
 
     if (error) {
@@ -159,6 +164,8 @@ export default function Estaciones({ userRole = 'admin' }) {
       setEstacionesList(estacionesList.filter((est) => est.id !== id));
       mostrarNotificacion('success', `Estación "${nombreEst}" eliminada.`);
     }
+
+    setEstacionAEliminar(null);
   };
 
   // 1. Filtrar por búsqueda y sede
@@ -199,6 +206,42 @@ export default function Estaciones({ userRole = 'admin' }) {
           <button onClick={() => setAlerta(null)} className="ml-2 text-gray-400 hover:text-gray-600">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Modal de Confirmación de Eliminación */}
+      {estacionAEliminar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl border border-gray-100 transition-all">
+            <div className="w-16 h-16 bg-rose-100/70 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            
+            <h3 className="text-lg font-bold text-gray-900 mb-1">
+              ¿Eliminar esta estación?
+            </h3>
+            
+            <p className="text-sm text-gray-500 mb-6">
+              Estás a punto de eliminar <strong className="text-gray-700">"{estacionAEliminar.nombre}"</strong>. Esta acción no se puede deshacer.
+            </p>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setEstacionAEliminar(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarEliminacion}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-medium text-sm transition-colors shadow-sm"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -377,7 +420,7 @@ export default function Estaciones({ userRole = 'admin' }) {
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleEliminar(estacion.id, estacion.nombre)}
+                        onClick={() => setEstacionAEliminar(estacion)}
                         className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                         title="Eliminar"
                       >
@@ -411,7 +454,7 @@ export default function Estaciones({ userRole = 'admin' }) {
                 <ChevronLeft className="w-4 h-4 text-gray-600" />
               </button>
 
-              {/* Botones Numerados (Página 1, 2, 3...) */}
+              {/* Botones Numerados */}
               {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((numPagina) => (
                 <button
                   key={numPagina}
